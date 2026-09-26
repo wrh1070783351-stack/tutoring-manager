@@ -1,0 +1,32 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- 启动图标前景：白色课时卡片 + 记录行 + 对勾 -->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="108dp"
+    android:height="108dp"
+    android:viewportWidth="108"
+    android:viewportHeight="108">
+    <path
+        android:fillColor="#FFFFFFFF"
+        android:pathData="M36,32 h36 a5,5 0 0 1 5,5 v34 a5,5 0 0 1 -5,5 h-36 a5,5 0 0 1 -5,-5 v-34 a5,5 0 0 1 5,-5 z" />
+    <path
+        android:strokeColor="#0E7490"
+        android:strokeWidth="4"
+        android:strokeLineCap="round"
+        android:pathData="M41,44 h20" />
+    <path
+        android:strokeColor="#0E7490"
+        android:strokeWidth="4"
+        android:strokeLineCap="round"
+        android:pathData="M41,54 h20" />
+    <path
+        android:strokeColor="#0E7490"
+        android:strokeWidth="4"
+        android:strokeLineCap="round"
+        android:pathData="M41,64 h10" />
+    <path
+        android:strokeColor="#0E7490"
+        android:strokeWidth="4.5"
+        android:strokeLineCap="round"
+        android:strokeLineJoin="round"
+        android:pathData="M57,63 l5,5 l11,-12" />
+</vector>
