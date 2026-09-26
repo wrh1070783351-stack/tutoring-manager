@@ -13,9 +13,11 @@
 
 - [需求草案](docs/需求草案.md)（随讨论持续更新）
 
-## 技术栈
+## 技术栈（已定）
 
-待定，候选方案见需求草案「技术选型」一节。
+- **Kotlin + Jetpack Compose**（Material 3），单 Activity + Navigation
+- **Room** 本地数据库（SQLite），完全离线使用，无服务器
+- 架构：MVVM + Repository
 
 ## 目录结构
 
@@ -24,5 +26,5 @@
 ## 开发环境
 
 - OS: Windows 10
-- Git 2.51
-- Android 开发工具链：待搭建
+- Git 2.51 / JDK 18（已装）
+- Android Studio + Android SDK：**待安装**（M0 任务，见需求草案里程碑）
