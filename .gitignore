@@ -1,0 +1,32 @@
+# ---- Android / Gradle ----
+*.iml
+.gradle/
+local.properties
+.idea/
+.DS_Store
+build/
+captures/
+.externalNativeBuild/
+.cxx/
+
+# ---- Flutter (备用，若采用 Flutter 技术栈) ----
+.dart_tool/
+.flutter-plugins
+.flutter-plugins-dependencies
+.packages
+pubspec.lock
+
+# ---- Node / Web (备用) ----
+node_modules/
+dist/
+
+# ---- 本地隐私数据：切勿提交学生信息 ----
+*.db
+*.sqlite
+*.xlsx.bak
+export/
+backup/
+
+# ---- 系统杂项 ----
+Thumbs.db
+*.log
