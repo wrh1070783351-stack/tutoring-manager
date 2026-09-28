@@ -54,6 +54,13 @@ internal fun ClassWithTimes.timesSummary(): String =
                 TimeUtils.minutesToText(it.startMinute) + " - " + TimeUtils.minutesToText(it.endMinute)
         }
 
+/** 列表副标题：科目与时间段用 · 连接；时间段缺失时提示未设置。 */
+internal fun classSubtitle(subject: String, timesSummary: String): String =
+    listOfNotNull(
+        subject.ifBlank { null },
+        timesSummary.ifBlank { "未设置上课时间" },
+    ).joinToString(" · ").ifBlank { "未设置上课时间" }
+
 @Composable
 fun ClassListScreen(onEdit: (Long) -> Unit) {
     val vm: ClassesViewModel = viewModel(factory = ClassesViewModel.Factory)
@@ -87,12 +94,7 @@ fun ClassListScreen(onEdit: (Long) -> Unit) {
                                 )
                             },
                             supportingContent = {
-                                Text(
-                                    listOf(
-                                        cw.clazz.subject.ifBlank { null },
-                                        cw.timesSummary().ifBlank { "未设置上课时间" },
-                                    ).joinToString(" · ")
-                                )
+                                Text(classSubtitle(cw.clazz.subject, cw.timesSummary()))
                             },
                             colors = ListItemDefaults.colors(containerColor = MaterialTheme.colorScheme.surface),
                             modifier = Modifier.clickable { onEdit(cw.clazz.id) },
