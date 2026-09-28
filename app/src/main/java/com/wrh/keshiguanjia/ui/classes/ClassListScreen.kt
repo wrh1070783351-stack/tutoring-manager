@@ -62,13 +62,13 @@ internal fun classSubtitle(subject: String, timesSummary: String): String =
     ).joinToString(" · ").ifBlank { "未设置上课时间" }
 
 @Composable
-fun ClassListScreen(onEdit: (Long) -> Unit) {
+fun ClassListScreen(onAdd: () -> Unit, onOpen: (Long) -> Unit) {
     val vm: ClassesViewModel = viewModel(factory = ClassesViewModel.Factory)
     val classes by vm.classes.collectAsStateWithLifecycle()
 
     Scaffold(
         floatingActionButton = {
-            FloatingActionButton(onClick = { onEdit(-1L) }) {
+            FloatingActionButton(onClick = onAdd) {
                 Icon(Icons.Filled.Add, contentDescription = "添加班级")
             }
         },
@@ -100,7 +100,7 @@ fun ClassListScreen(onEdit: (Long) -> Unit) {
                                 Text(classSubtitle(cw.clazz.subject, cw.timesSummary()))
                             },
                             colors = ListItemDefaults.colors(containerColor = MaterialTheme.colorScheme.surface),
-                            modifier = Modifier.clickable { onEdit(cw.clazz.id) },
+                            modifier = Modifier.clickable { onOpen(cw.clazz.id) },
                         )
                         HorizontalDivider()
                     }

@@ -5,6 +5,7 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.wrapContentHeight
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Card
@@ -142,6 +143,7 @@ fun HomeScreen(onOpenRollCall: (classId: Long, date: LocalDate) -> Unit) {
     var viewMode by rememberSaveable { mutableIntStateOf(0) }
     var selectedDate by remember { mutableStateOf<LocalDate?>(null) }
     var showReminders by remember { mutableStateOf(false) }
+    var capturing by remember { mutableStateOf(false) }
     val capture = rememberCaptureState()
 
     Column(Modifier.fillMaxSize()) {
@@ -156,7 +158,23 @@ fun HomeScreen(onOpenRollCall: (classId: Long, date: LocalDate) -> Unit) {
                 style = MaterialTheme.typography.titleLarge,
                 modifier = Modifier.weight(1f),
             )
-            ShareButton(capture, if (viewMode == 0) "schedule-week.png" else "schedule-month.png")
+            ShareButton(
+                capture,
+                if (viewMode == 0) "schedule-week.png" else "schedule-month.png",
+                captureBlock = if (viewMode == 0) {
+                    {
+                        // 长截图：切到全量渲染模式，等两帧布局稳定后捕获完整一周
+                        capturing = true
+                        androidx.compose.runtime.withFrameNanos { }
+                        androidx.compose.runtime.withFrameNanos { }
+                        val bitmap = capture.capture?.invoke()
+                        capturing = false
+                        bitmap
+                    }
+                } else {
+                    null
+                },
+            )
             FilterChip(selected = viewMode == 0, onClick = { viewMode = 0 }, label = { Text("周") })
             FilterChip(selected = viewMode == 1, onClick = { viewMode = 1 }, label = { Text("月") }, modifier = Modifier.padding(start = 4.dp))
         }
@@ -193,17 +211,25 @@ fun HomeScreen(onOpenRollCall: (classId: Long, date: LocalDate) -> Unit) {
 
         ShareableBox(
             capture,
-            modifier = Modifier
-                .weight(1f)
-                .fillMaxWidth(),
+            modifier = if (capturing) {
+                // 截图模式：不限高，让整周内容完整渲染进图层
+                Modifier
+                    .fillMaxWidth()
+                    .wrapContentHeight()
+            } else {
+                Modifier
+                    .weight(1f)
+                    .fillMaxWidth()
+            },
         ) {
             if (viewMode == 0) {
                 WeeklySchedule(
                     weekDates = vm.weekDates,
                     lessonsByDate = week,
-                    modifier = Modifier.fillMaxSize(),
+                    modifier = Modifier.fillMaxWidth(),
+                    full = capturing,
                     lessonTrailing = { lesson, date ->
-                        if (!lesson.isCancelled) {
+                        if (!lesson.isCancelled && !capturing) {
                             TextButton(onClick = { onOpenRollCall(lesson.classId, date) }) { Text("点名") }
                         }
                     },
@@ -357,28 +383,16 @@ private fun DayLessonsDialog(
     )
 
     rescheduleLesson?.let { lesson ->
-        val pickerState = androidx.compose.material3.rememberDatePickerState(
-            initialSelectedDateMillis = date.atStartOfDay(java.time.ZoneOffset.UTC).toInstant().toEpochMilli(),
-        )
-        androidx.compose.material3.AlertDialog(
-            onDismissRequest = { rescheduleLesson = null },
-            title = { Text("调至哪一天？") },
-            text = {
-                androidx.compose.material3.DatePicker(
-                    state = pickerState,
-                    showModeToggle = false,
-                )
+        var targetDate by remember { mutableStateOf(date) }
+        com.wrh.keshiguanjia.ui.SimpleCalendarDialog(
+            title = "调至哪一天？",
+            initialDate = date,
+            onConfirm = {
+                targetDate = it
+                onReschedule(lesson, targetDate)
+                rescheduleLesson = null
             },
-            confirmButton = {
-                TextButton(onClick = {
-                    pickerState.selectedDateMillis?.let { millis ->
-                        val to = java.time.Instant.ofEpochMilli(millis).atZone(java.time.ZoneOffset.UTC).toLocalDate()
-                        onReschedule(lesson, to)
-                    }
-                    rescheduleLesson = null
-                }) { Text("确定") }
-            },
-            dismissButton = { TextButton(onClick = { rescheduleLesson = null }) { Text("取消") } },
+            onDismiss = { rescheduleLesson = null },
         )
     }
 

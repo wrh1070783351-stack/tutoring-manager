@@ -39,12 +39,14 @@ object Routes {
     const val STATS = "stats"
     const val STUDENT_EDIT = "student/{studentId}"
     const val CLASS_EDIT = "class/{classId}"
+    const val CLASS_DETAIL = "class_detail/{classId}"
     const val STUDENT_DETAIL = "student_detail/{studentId}"
     const val ENROLL = "enroll/{studentId}"
     const val ROLLCALL = "rollcall/{classId}/{date}"
 
     fun studentEdit(id: Long) = "student/$id"
     fun classEdit(id: Long) = "class/$id"
+    fun classDetail(id: Long) = "class_detail/$id"
     fun studentDetail(id: Long) = "student_detail/$id"
     fun enroll(id: Long) = "enroll/$id"
     fun rollCall(classId: Long, dateIso: String) = "rollcall/$classId/$dateIso"
@@ -108,7 +110,20 @@ fun KeshiApp() {
                 )
             }
             composable(Routes.CLASSES) {
-                ClassListScreen(onEdit = { id -> navController.navigate(Routes.classEdit(id)) })
+                ClassListScreen(
+                    onAdd = { navController.navigate(Routes.classEdit(-1L)) },
+                    onOpen = { id -> navController.navigate(Routes.classDetail(id)) },
+                )
+            }
+            composable(Routes.CLASS_DETAIL) { entry ->
+                val id = entry.arguments?.getString("classId")?.toLongOrNull() ?: -1L
+                com.wrh.keshiguanjia.ui.classes.ClassDetailScreen(
+                    classId = id,
+                    onBack = { navController.popBackStack() },
+                    onEditClass = {
+                        navController.navigate(Routes.classEdit(id))
+                    },
+                )
             }
             composable(Routes.STATS) {
                 com.wrh.keshiguanjia.ui.stats.StatsScreen()

@@ -95,6 +95,9 @@ class EnrollmentRepository(
     suspend fun updateTerm(term: TermRecord) = termDao.update(term)
     suspend fun deleteTermById(id: Long) = termDao.deleteById(id)
 
+    /** 从班级移除学生：删除报名（级联删课时包/学期/考勤/关联缴费不动——缴费流水保留作历史）。 */
+    suspend fun deleteEnrollment(id: Long) = enrollmentDao.deleteById(id)
+
     // ---- 点名消课（M3）----
 
     fun observeForClass(classId: Long): Flow<List<EnrollmentWithDetails>> =

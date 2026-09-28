@@ -466,11 +466,11 @@ private fun RenewDialog(
                 if (isSessions) {
                     OutlinedTextField(sessionsText, { sessionsText = it }, label = { Text("购买次数 *") }, singleLine = true, modifier = Modifier.fillMaxWidth())
                     OutlinedTextField(bonusText, { bonusText = it }, label = { Text("赠送次数") }, singleLine = true, modifier = Modifier.fillMaxWidth().padding(top = 6.dp))
-                    OutlinedTextField(validUntilText, { validUntilText = it }, label = { Text("有效期（yyyy-MM-dd，可选）") }, singleLine = true, modifier = Modifier.fillMaxWidth().padding(top = 6.dp))
+                    com.wrh.keshiguanjia.ui.DateField("有效期（可选）", validUntilText.ifBlank { java.time.LocalDate.now().toString() }, { validUntilText = it.toString() }, modifier = Modifier.fillMaxWidth().padding(top = 6.dp))
                     OutlinedTextField(amountText, { amountText = it }, label = { Text("金额（元）") }, singleLine = true, modifier = Modifier.fillMaxWidth().padding(top = 6.dp))
                 } else {
-                    OutlinedTextField(startDate, { startDate = it }, label = { Text("开始日期（yyyy-MM-dd）") }, singleLine = true, modifier = Modifier.fillMaxWidth())
-                    OutlinedTextField(endDate, { endDate = it }, label = { Text("结束日期") }, singleLine = true, modifier = Modifier.fillMaxWidth().padding(top = 6.dp))
+                    com.wrh.keshiguanjia.ui.DateField("开始日期", startDate, { startDate = it.toString() }, modifier = Modifier.fillMaxWidth())
+                    com.wrh.keshiguanjia.ui.DateField("结束日期", endDate, { endDate = it.toString() }, modifier = Modifier.fillMaxWidth().padding(top = 6.dp))
                     OutlinedTextField(amountText, { amountText = it }, label = { Text("金额（元）") }, singleLine = true, modifier = Modifier.fillMaxWidth().padding(top = 6.dp))
                 }
                 Row(Modifier.padding(top = 8.dp), verticalAlignment = Alignment.CenterVertically) {
@@ -672,7 +672,7 @@ private fun EditPackageDialog(
             Column {
                 OutlinedTextField(sessionsText, { sessionsText = it; error = null }, label = { Text("购买次数") }, singleLine = true, modifier = Modifier.fillMaxWidth())
                 OutlinedTextField(bonusText, { bonusText = it }, label = { Text("赠送次数") }, singleLine = true, modifier = Modifier.fillMaxWidth().padding(top = 6.dp))
-                OutlinedTextField(validUntilText, { validUntilText = it }, label = { Text("有效期（yyyy-MM-dd，可清空）") }, singleLine = true, modifier = Modifier.fillMaxWidth().padding(top = 6.dp))
+                com.wrh.keshiguanjia.ui.DateField("有效期（可清空）", validUntilText.ifBlank { java.time.LocalDate.now().toString() }, { validUntilText = it.toString() }, modifier = Modifier.fillMaxWidth().padding(top = 6.dp))
                 OutlinedTextField(amountText, { amountText = it; error = null }, label = { Text("金额（元）") }, singleLine = true, modifier = Modifier.fillMaxWidth().padding(top = 6.dp))
                 if (error != null) {
                     Text(error!!, color = MaterialTheme.colorScheme.error, style = MaterialTheme.typography.bodySmall, modifier = Modifier.padding(top = 6.dp))
@@ -718,8 +718,8 @@ private fun EditTermDialog(
         title = { Text("编辑学期记录") },
         text = {
             Column {
-                OutlinedTextField(startDate, { startDate = it; error = null }, label = { Text("开始日期（yyyy-MM-dd）") }, singleLine = true, modifier = Modifier.fillMaxWidth())
-                OutlinedTextField(endDate, { endDate = it; error = null }, label = { Text("结束日期") }, singleLine = true, modifier = Modifier.fillMaxWidth().padding(top = 6.dp))
+                com.wrh.keshiguanjia.ui.DateField("开始日期", startDate, { startDate = it.toString(); error = null }, modifier = Modifier.fillMaxWidth())
+                com.wrh.keshiguanjia.ui.DateField("结束日期", endDate, { endDate = it.toString(); error = null }, modifier = Modifier.fillMaxWidth().padding(top = 6.dp))
                 OutlinedTextField(amountText, { amountText = it; error = null }, label = { Text("金额（元）") }, singleLine = true, modifier = Modifier.fillMaxWidth().padding(top = 6.dp))
                 if (error != null) {
                     Text(error!!, color = MaterialTheme.colorScheme.error, style = MaterialTheme.typography.bodySmall, modifier = Modifier.padding(top = 6.dp))
@@ -762,7 +762,7 @@ private fun RegisterPaymentDialog(
         text = {
             Column {
                 OutlinedTextField(amountText, { amountText = it; error = null }, label = { Text("金额（元）") }, singleLine = true, modifier = Modifier.fillMaxWidth())
-                OutlinedTextField(dateText, { dateText = it }, label = { Text("缴费日期（yyyy-MM-dd）") }, singleLine = true, modifier = Modifier.fillMaxWidth().padding(top = 6.dp))
+                com.wrh.keshiguanjia.ui.DateField("缴费日期", dateText, { dateText = it.toString() }, modifier = Modifier.fillMaxWidth().padding(top = 6.dp))
                 Row(Modifier.padding(top = 8.dp), verticalAlignment = Alignment.CenterVertically) {
                     Text("方式：", style = MaterialTheme.typography.bodyMedium)
                     Payment.METHOD_LABELS.take(3).forEachIndexed { i, label ->

@@ -194,10 +194,10 @@ fun EnrollScreen(studentId: Long, onDone: () -> Unit) {
         if (state.billingType == Enrollment.BILLING_SESSIONS) {
             OutlinedTextField(state.sessionsText, vm::onSessions, label = { Text("购买次数 *") }, singleLine = true, modifier = Modifier.fillMaxWidth().padding(top = 8.dp))
             OutlinedTextField(state.bonusText, vm::onBonus, label = { Text("赠送次数") }, singleLine = true, modifier = Modifier.fillMaxWidth().padding(top = 8.dp))
-            OutlinedTextField(state.validUntilText, vm::onValidUntil, label = { Text("有效期（yyyy-MM-dd，可选）") }, singleLine = true, modifier = Modifier.fillMaxWidth().padding(top = 8.dp))
+            com.wrh.keshiguanjia.ui.DateField("有效期（可选）", state.validUntilText.ifBlank { java.time.LocalDate.now().toString() }, { vm.onValidUntil(it.toString()) }, modifier = Modifier.fillMaxWidth().padding(top = 8.dp))
         } else {
-            OutlinedTextField(state.startDateText, vm::onStartDate, label = { Text("开始日期（yyyy-MM-dd）") }, singleLine = true, modifier = Modifier.fillMaxWidth().padding(top = 8.dp))
-            OutlinedTextField(state.endDateText, vm::onEndDate, label = { Text("结束日期") }, singleLine = true, modifier = Modifier.fillMaxWidth().padding(top = 8.dp))
+            com.wrh.keshiguanjia.ui.DateField("开始日期", state.startDateText, { vm.onStartDate(it.toString()) }, modifier = Modifier.fillMaxWidth().padding(top = 8.dp))
+            com.wrh.keshiguanjia.ui.DateField("结束日期", state.endDateText, { vm.onEndDate(it.toString()) }, modifier = Modifier.fillMaxWidth().padding(top = 8.dp))
         }
 
         OutlinedTextField(state.amountText, vm::onAmount, label = { Text("约定金额（元，可留空表示待定）") }, singleLine = true, modifier = Modifier.fillMaxWidth().padding(top = 8.dp))
@@ -219,7 +219,7 @@ fun EnrollScreen(studentId: Long, onDone: () -> Unit) {
 
         if (state.paidNow) {
             Text("缴费日期", style = MaterialTheme.typography.titleSmall, modifier = Modifier.padding(top = 12.dp))
-            OutlinedTextField(state.payDateText, vm::onPayDate, label = { Text("yyyy-MM-dd") }, singleLine = true, modifier = Modifier.fillMaxWidth().padding(top = 4.dp))
+            com.wrh.keshiguanjia.ui.DateField("缴费日期", state.payDateText, { vm.onPayDate(it.toString()) }, modifier = Modifier.fillMaxWidth().padding(top = 4.dp))
 
             Text("缴费方式", style = MaterialTheme.typography.titleSmall, modifier = Modifier.padding(top = 12.dp))
             Row {

@@ -18,8 +18,6 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
-import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
@@ -46,6 +44,8 @@ import androidx.compose.ui.draw.drawWithCache
 import androidx.compose.ui.graphics.ImageBitmap
 import androidx.compose.ui.graphics.asAndroidBitmap
 import androidx.compose.ui.graphics.layer.drawLayer
+import androidx.compose.ui.layout.onGloballyPositioned
+import androidx.compose.ui.layout.positionInRoot
 import androidx.compose.ui.graphics.rememberGraphicsLayer
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
@@ -98,17 +98,23 @@ fun ShareableBox(
     }
 }
 
-/** 分享按钮：把捕获的位图写入缓存并通过系统分享面板发出。 */
+/** 分享按钮：把捕获的位图写入缓存并通过系统分享面板发出。captureBlock 优先（用于长截图等特殊场景）。 */
 @Composable
-fun ShareButton(state: CaptureState, fileName: String, modifier: Modifier = Modifier) {
+fun ShareButton(
+    state: CaptureState,
+    fileName: String,
+    modifier: Modifier = Modifier,
+    captureBlock: (suspend () -> ImageBitmap?)? = null,
+) {
     val scope = rememberCoroutineScope()
     val context = LocalContext.current
     var error by remember { mutableStateOf<String?>(null) }
 
     IconButton(onClick = {
         scope.launch {
-            state.capture?.let { capture ->
-                runCatching { shareImage(context, capture(), fileName) }
+            val bitmap = captureBlock?.invoke() ?: state.capture?.invoke()
+            if (bitmap != null) {
+                runCatching { shareImage(context, bitmap, fileName) }
                     .onFailure { error = "截图失败：${it.message}" }
             }
         }
@@ -151,108 +157,122 @@ fun classColor(classId: Long) = androidx.compose.ui.graphics.Color(
     CLASS_PALETTE[(classId % CLASS_PALETTE.size).toInt()]
 )
 
-/** 周视图（竖向日程式：按天分组，浅色圆角块隔断，今天自动滚动到顶部附近）。 */
+/**
+ * 周视图（竖向日程式：按天分组，浅色圆角块隔断）。
+ * full=true 时整周完整渲染（长截图用）；否则在视口内滚动并自动定位到今天。
+ */
 @Composable
 fun WeeklySchedule(
     weekDates: List<LocalDate>,
     lessonsByDate: Map<LocalDate, List<DayLesson>>,
     modifier: Modifier = Modifier,
+    full: Boolean = false,
     lessonTrailing: @Composable (DayLesson, LocalDate) -> Unit = { _, _ -> },
 ) {
     val today = remember { LocalDate.now() }
-    val listState = rememberLazyListState()
+    val scrollState = rememberScrollState()
+    var todayOffsetY by remember { mutableStateOf(0f) }
+
     LaunchedEffect(Unit) {
-        val index = weekDates.indexOf(today).coerceAtLeast(0)
-        if (index > 0) listState.scrollToItem(index)
+        if (!full && todayOffsetY > 0) scrollState.scrollTo(todayOffsetY.toInt())
     }
-    LazyColumn(
-        state = listState,
-        contentPadding = PaddingValues(horizontal = 12.dp, vertical = 8.dp),
-        modifier = modifier.fillMaxSize(),
-    ) {
+
+    val content: @Composable () -> Unit = {
         weekDates.forEach { date ->
-            item(key = date.toString()) {
-                val lessons = lessonsByDate[date].orEmpty()
-                val isToday = date == today
-                Column(
-                    Modifier
-                        .fillMaxWidth()
-                        .padding(top = 8.dp)
-                        .background(
-                            if (isToday) {
-                                MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.45f)
-                            } else {
-                                MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.45f)
-                            },
-                            androidx.compose.foundation.shape.RoundedCornerShape(14.dp),
-                        )
-                        .padding(horizontal = 12.dp, vertical = 8.dp),
-                ) {
-                    Text(
-                        TimeUtils.dayLabel(date.dayOfWeek.value) +
-                            " ${date.monthValue}/${date.dayOfMonth}" +
-                            (if (isToday) " · 今天" else ""),
-                        style = MaterialTheme.typography.titleSmall,
-                        fontWeight = FontWeight.Bold,
-                        color = if (isToday) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant,
+            val lessons = lessonsByDate[date].orEmpty()
+            val isToday = date == today
+            Column(
+                Modifier
+                    .fillMaxWidth()
+                    .padding(top = 8.dp)
+                    .onGloballyPositioned { if (isToday) todayOffsetY = it.positionInRoot().y }
+                    .background(
+                        if (isToday) {
+                            MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.45f)
+                        } else {
+                            MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.45f)
+                        },
+                        androidx.compose.foundation.shape.RoundedCornerShape(14.dp),
                     )
-                    if (lessons.isEmpty()) {
-                        Text(
-                            "无课",
-                            style = MaterialTheme.typography.bodySmall,
-                            color = MaterialTheme.colorScheme.outline,
-                            modifier = Modifier.padding(top = 4.dp, bottom = 2.dp),
-                        )
-                    }
-                    lessons.forEachIndexed { index, lesson ->
-                        if (index > 0) HorizontalDivider(color = MaterialTheme.colorScheme.outline.copy(alpha = 0.15f))
-                        Row(
+                    .padding(horizontal = 12.dp, vertical = 8.dp),
+            ) {
+                Text(
+                    TimeUtils.dayLabel(date.dayOfWeek.value) +
+                        " ${date.monthValue}/${date.dayOfMonth}" +
+                        (if (isToday) " · 今天" else ""),
+                    style = MaterialTheme.typography.titleSmall,
+                    fontWeight = FontWeight.Bold,
+                    color = if (isToday) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+                if (lessons.isEmpty()) {
+                    Text(
+                        "无课",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.outline,
+                        modifier = Modifier.padding(top = 4.dp, bottom = 2.dp),
+                    )
+                }
+                lessons.forEachIndexed { index, lesson ->
+                    if (index > 0) HorizontalDivider(color = MaterialTheme.colorScheme.outline.copy(alpha = 0.15f))
+                    Row(
+                        Modifier
+                            .fillMaxWidth()
+                            .padding(vertical = 8.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                    ) {
+                        Box(
                             Modifier
-                                .fillMaxWidth()
-                                .padding(vertical = 8.dp),
-                            verticalAlignment = Alignment.CenterVertically,
-                        ) {
-                            Box(
-                                Modifier
-                                    .padding(end = 10.dp)
-                                    .width(4.dp)
-                                    .height(38.dp)
-                                    .background(
-                                        if (lesson.isCancelled) MaterialTheme.colorScheme.outline else classColor(lesson.classId),
-                                        androidx.compose.foundation.shape.RoundedCornerShape(2.dp),
-                                    ),
+                                .padding(end = 10.dp)
+                                .width(4.dp)
+                                .height(38.dp)
+                                .background(
+                                    if (lesson.isCancelled) MaterialTheme.colorScheme.outline else classColor(lesson.classId),
+                                    androidx.compose.foundation.shape.RoundedCornerShape(2.dp),
+                                ),
+                        )
+                        Column(Modifier.weight(1f)) {
+                            Text(
+                                TimeUtils.minutesToText(lesson.startMinute) + " - " +
+                                    TimeUtils.minutesToText(lesson.endMinute) +
+                                    (if (lesson.isCancelled) " · 已停课" else "") +
+                                    (if (lesson.isExtra) " · 加课" else ""),
+                                style = MaterialTheme.typography.labelMedium,
+                                color = if (lesson.isCancelled) MaterialTheme.colorScheme.outline
+                                else MaterialTheme.colorScheme.onSurfaceVariant,
                             )
-                            Column(Modifier.weight(1f)) {
+                            Text(
+                                lesson.className,
+                                style = MaterialTheme.typography.bodyMedium,
+                                fontWeight = FontWeight.SemiBold,
+                                color = if (lesson.isCancelled) MaterialTheme.colorScheme.outline
+                                else classColor(lesson.classId),
+                            )
+                            val extras = listOf(lesson.subject, lesson.room).filter { it.isNotBlank() }
+                            if (extras.isNotEmpty()) {
                                 Text(
-                                    TimeUtils.minutesToText(lesson.startMinute) + " - " +
-                                        TimeUtils.minutesToText(lesson.endMinute) +
-                                        (if (lesson.isCancelled) " · 已停课" else "") +
-                                        (if (lesson.isExtra) " · 加课" else ""),
-                                    style = MaterialTheme.typography.labelMedium,
-                                    color = if (lesson.isCancelled) MaterialTheme.colorScheme.outline
-                                    else MaterialTheme.colorScheme.onSurfaceVariant,
+                                    extras.joinToString(" · "),
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
                                 )
-                                Text(
-                                    lesson.className,
-                                    style = MaterialTheme.typography.bodyMedium,
-                                    fontWeight = FontWeight.SemiBold,
-                                    color = if (lesson.isCancelled) MaterialTheme.colorScheme.outline
-                                    else classColor(lesson.classId),
-                                )
-                                val extras = listOf(lesson.subject, lesson.room).filter { it.isNotBlank() }
-                                if (extras.isNotEmpty()) {
-                                    Text(
-                                        extras.joinToString(" · "),
-                                        style = MaterialTheme.typography.bodySmall,
-                                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                                    )
-                                }
                             }
-                            lessonTrailing(lesson, date)
                         }
+                        lessonTrailing(lesson, date)
                     }
                 }
             }
+        }
+    }
+
+    if (full) {
+        Column(modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 8.dp)) { content() }
+    } else {
+        Column(
+            modifier
+                .fillMaxSize()
+                .verticalScroll(scrollState)
+                .padding(horizontal = 12.dp, vertical = 8.dp),
+        ) {
+            content()
         }
     }
 }

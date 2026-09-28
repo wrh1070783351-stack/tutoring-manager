@@ -142,4 +142,17 @@ class EnrollmentRepositoryTest {
         assertEquals(null, db.enrollmentDao().getById(eid))
         assertTrue(db.paymentDao().observeForStudent(studentId).first().isEmpty())
     }
+
+    @Test
+    fun deleteEnrollment_cascadesPackagesButKeepsPayments() = runBlocking {
+        val eid = repo.enroll(
+            studentId,
+            BillingDraft(classId = classId, billingType = Enrollment.BILLING_SESSIONS, sessions = 10, amountCents = 100000, payDate = "2026-09-29"),
+        )
+        repo.deleteEnrollment(eid)
+        assertEquals(null, db.enrollmentDao().getById(eid))
+        // 课时包随报名级联删除；缴费流水保留（历史记录）
+        assertTrue(repo.observeForStudent(studentId).first().isEmpty())
+        assertEquals(1, repo.observePaymentsForStudent(studentId).first().size)
+    }
 }
