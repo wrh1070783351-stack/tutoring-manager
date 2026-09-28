@@ -3,16 +3,20 @@ package com.wrh.keshiguanjia.data
 import androidx.room.Dao
 import androidx.room.Embedded
 import androidx.room.Insert
+import androidx.room.MapInfo
 import androidx.room.Query
 import androidx.room.Relation
 import androidx.room.Transaction
+import androidx.room.Update
 import kotlinx.coroutines.flow.Flow
 
-/** 报名及其班级、课时包/学期记录的聚合查询结果。 */
+/** 报名及其班级、课时包/学期记录、学生的聚合查询结果。 */
 data class EnrollmentWithDetails(
     @Embedded val enrollment: Enrollment,
     @Relation(parentColumn = "classId", entityColumn = "id")
     val clazz: ClassRoom,
+    @Relation(parentColumn = "studentId", entityColumn = "id")
+    val student: Student,
     @Relation(parentColumn = "id", entityColumn = "enrollmentId")
     val packages: List<ClassPackage>,
     @Relation(parentColumn = "id", entityColumn = "enrollmentId")
@@ -25,6 +29,10 @@ interface EnrollmentDao {
     @Transaction
     @Query("SELECT * FROM enrollments WHERE studentId = :studentId ORDER BY createdAt DESC")
     fun observeForStudent(studentId: Long): Flow<List<EnrollmentWithDetails>>
+
+    @Transaction
+    @Query("SELECT * FROM enrollments WHERE classId = :classId ORDER BY createdAt DESC")
+    fun observeForClass(classId: Long): Flow<List<EnrollmentWithDetails>>
 
     @Query("SELECT * FROM enrollments WHERE id = :id")
     suspend fun getById(id: Long): Enrollment?
@@ -82,5 +90,42 @@ interface LessonOverrideDao {
     suspend fun insert(overrideItem: LessonOverride): Long
 
     @Query("DELETE FROM lesson_overrides WHERE id = :id")
+    suspend fun deleteById(id: Long)
+}
+
+@Dao
+interface AttendanceDao {
+
+    @Query("SELECT * FROM attendance WHERE classId = :classId AND date = :date")
+    fun observeForClassDate(classId: Long, date: String): Flow<List<Attendance>>
+
+    @Query("SELECT * FROM attendance WHERE studentId = :studentId ORDER BY date DESC")
+    fun observeForStudent(studentId: Long): Flow<List<Attendance>>
+
+    @Query("SELECT * FROM attendance WHERE studentId = :studentId AND classId = :classId AND date = :date")
+    suspend fun getFor(studentId: Long, classId: Long, date: String): Attendance?
+
+    @Insert
+    suspend fun insert(attendance: Attendance): Long
+
+    @Update
+    suspend fun updateRecord(attendance: Attendance)
+
+    /** 消课计数：到课 + 缺勤（请假不扣） */
+    @MapInfo(keyColumn = "enrollmentId", valueColumn = "consumed")
+    @Query(
+        "SELECT enrollmentId, COUNT(*) AS consumed FROM attendance " +
+            "WHERE status IN (0, 2) GROUP BY enrollmentId"
+    )
+    fun observeConsumedAll(): Flow<Map<Long, Int>>
+
+    @MapInfo(keyColumn = "enrollmentId", valueColumn = "consumed")
+    @Query(
+        "SELECT enrollmentId, COUNT(*) AS consumed FROM attendance " +
+            "WHERE studentId = :studentId AND status IN (0, 2) GROUP BY enrollmentId"
+    )
+    fun observeConsumedForStudent(studentId: Long): Flow<Map<Long, Int>>
+
+    @Query("DELETE FROM attendance WHERE id = :id")
     suspend fun deleteById(id: Long)
 }

@@ -33,6 +33,34 @@ class MoneyUtilsTest {
     }
 }
 
+class RemainingSessionsTest {
+
+    private fun pkg(total: Int, bonus: Int = 0) =
+        com.wrh.keshiguanjia.data.ClassPackage(
+            enrollmentId = 1, totalSessions = total, bonusSessions = bonus, amountCents = 0,
+        )
+
+    @Test
+    fun remaining_equalsPurchasedWhenNoConsumption() {
+        assertEquals(22, Billing.remainingSessions(listOf(pkg(20, 2)), 0))
+    }
+
+    @Test
+    fun remaining_subtractsConsumed() {
+        assertEquals(18, Billing.remainingSessions(listOf(pkg(20)), 2))
+    }
+
+    @Test
+    fun remaining_canGoNegative_forHighlight() {
+        assertEquals(-1, Billing.remainingSessions(listOf(pkg(20)), 21))
+    }
+
+    @Test
+    fun multiplePackagesSumUp() {
+        assertEquals(30, Billing.purchasedSessions(listOf(pkg(10), pkg(18, 2))))
+    }
+}
+
 class BillingValidateTest {
 
     private fun draft(type: Int, modify: BillingDraft.() -> BillingDraft = { this }) =

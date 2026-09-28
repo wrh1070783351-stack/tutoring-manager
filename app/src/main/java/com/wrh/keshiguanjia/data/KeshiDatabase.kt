@@ -11,9 +11,9 @@ import androidx.sqlite.db.SupportSQLiteDatabase
     entities = [
         Student::class, ClassRoom::class, ClassTime::class,
         Enrollment::class, ClassPackage::class, TermRecord::class,
-        Payment::class, LessonOverride::class,
+        Payment::class, LessonOverride::class, Attendance::class,
     ],
-    version = 2,
+    version = 3,
     exportSchema = false,
 )
 abstract class KeshiDatabase : RoomDatabase() {
@@ -25,6 +25,7 @@ abstract class KeshiDatabase : RoomDatabase() {
     abstract fun termRecordDao(): TermRecordDao
     abstract fun paymentDao(): PaymentDao
     abstract fun lessonOverrideDao(): LessonOverrideDao
+    abstract fun attendanceDao(): AttendanceDao
 
     companion object {
         const val NAME = "keshi.db"
@@ -99,9 +100,33 @@ abstract class KeshiDatabase : RoomDatabase() {
             }
         }
 
+        /** v2 → v3：新增考勤（消课）表。 */
+        val MIGRATION_2_3 = object : Migration(2, 3) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL(
+                    "CREATE TABLE IF NOT EXISTS `attendance` (" +
+                        "`id` INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL, " +
+                        "`studentId` INTEGER NOT NULL, " +
+                        "`classId` INTEGER NOT NULL, " +
+                        "`enrollmentId` INTEGER NOT NULL, " +
+                        "`date` TEXT NOT NULL, " +
+                        "`status` INTEGER NOT NULL, " +
+                        "`note` TEXT NOT NULL, " +
+                        "`createdAt` INTEGER NOT NULL, " +
+                        "FOREIGN KEY(`studentId`) REFERENCES `students`(`id`) ON UPDATE NO ACTION ON DELETE CASCADE, " +
+                        "FOREIGN KEY(`classId`) REFERENCES `classes`(`id`) ON UPDATE NO ACTION ON DELETE CASCADE, " +
+                        "FOREIGN KEY(`enrollmentId`) REFERENCES `enrollments`(`id`) ON UPDATE NO ACTION ON DELETE CASCADE)"
+                )
+                db.execSQL("CREATE INDEX IF NOT EXISTS `index_attendance_studentId` ON `attendance` (`studentId`)")
+                db.execSQL("CREATE INDEX IF NOT EXISTS `index_attendance_classId` ON `attendance` (`classId`)")
+                db.execSQL("CREATE INDEX IF NOT EXISTS `index_attendance_enrollmentId` ON `attendance` (`enrollmentId`)")
+                db.execSQL("CREATE UNIQUE INDEX IF NOT EXISTS `index_attendance_studentId_classId_date` ON `attendance` (`studentId`, `classId`, `date`)")
+            }
+        }
+
         fun build(context: Context): KeshiDatabase =
             Room.databaseBuilder(context, KeshiDatabase::class.java, NAME)
-                .addMigrations(MIGRATION_1_2)
+                .addMigrations(MIGRATION_1_2, MIGRATION_2_3)
                 .build()
     }
 }
@@ -123,7 +148,9 @@ object Graph {
     val studentRepository: StudentRepository by lazy { StudentRepository(db.studentDao()) }
     val classRepository: ClassRepository by lazy { ClassRepository(db.classDao(), db.classTimeDao(), db) }
     val enrollmentRepository: EnrollmentRepository by lazy {
-        EnrollmentRepository(db.enrollmentDao(), db.classPackageDao(), db.termRecordDao(), db.paymentDao(), db)
+        EnrollmentRepository(
+            db.enrollmentDao(), db.classPackageDao(), db.termRecordDao(), db.paymentDao(), db, db.attendanceDao(),
+        )
     }
     val scheduleRepository: ScheduleRepository by lazy { ScheduleRepository(db.classDao(), db.classTimeDao(), db.lessonOverrideDao(), db) }
 }

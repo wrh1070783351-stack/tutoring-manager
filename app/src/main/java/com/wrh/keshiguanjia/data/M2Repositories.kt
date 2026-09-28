@@ -14,6 +14,7 @@ class EnrollmentRepository(
     private val termDao: TermRecordDao,
     private val paymentDao: PaymentDao,
     private val db: KeshiDatabase,
+    private val attendanceDao: AttendanceDao,
 ) {
     fun observeForStudent(studentId: Long): Flow<List<EnrollmentWithDetails>> =
         enrollmentDao.observeForStudent(studentId)
@@ -74,6 +75,41 @@ class EnrollmentRepository(
     }
 
     suspend fun deletePaymentById(id: Long) = paymentDao.deleteById(id)
+
+    // ---- 点名消课（M3）----
+
+    fun observeForClass(classId: Long): Flow<List<EnrollmentWithDetails>> =
+        enrollmentDao.observeForClass(classId)
+
+    fun observeAttendanceForClassDate(classId: Long, dateIso: String): Flow<List<Attendance>> =
+        attendanceDao.observeForClassDate(classId, dateIso)
+
+    fun observeConsumedAll(): Flow<Map<Long, Int>> = attendanceDao.observeConsumedAll()
+
+    fun observeConsumedForStudent(studentId: Long): Flow<Map<Long, Int>> =
+        attendanceDao.observeConsumedForStudent(studentId)
+
+    fun observeAttendanceForStudent(studentId: Long): Flow<List<Attendance>> =
+        attendanceDao.observeForStudent(studentId)
+
+    /** 标记某个学生的出勤；已存在则修改（可反复改状态）。 */
+    suspend fun markAttendance(studentId: Long, enrollmentId: Long, classId: Long, dateIso: String, status: Int) {
+        val existing = attendanceDao.getFor(studentId, classId, dateIso)
+        when (existing) {
+            null -> attendanceDao.insert(
+                Attendance(
+                    studentId = studentId, classId = classId,
+                    enrollmentId = enrollmentId, date = dateIso, status = status,
+                )
+            )
+            else -> attendanceDao.updateRecord(existing.copy(status = status))
+        }
+    }
+
+    /** 清除某学生某班某天的出勤记录（撤销）。 */
+    suspend fun clearAttendance(studentId: Long, classId: Long, dateIso: String) {
+        attendanceDao.getFor(studentId, classId, dateIso)?.let { attendanceDao.deleteById(it.id) }
+    }
 }
 
 /** 课表调整（调休）的业务入口。 */

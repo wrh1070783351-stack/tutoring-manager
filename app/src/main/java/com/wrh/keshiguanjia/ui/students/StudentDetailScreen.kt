@@ -5,6 +5,7 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
@@ -38,6 +39,7 @@ import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewModelScope
 import androidx.lifecycle.viewmodel.compose.viewModel
+import com.wrh.keshiguanjia.data.Attendance
 import com.wrh.keshiguanjia.data.Enrollment
 import com.wrh.keshiguanjia.data.EnrollmentWithDetails
 import com.wrh.keshiguanjia.data.Graph
@@ -45,12 +47,17 @@ import com.wrh.keshiguanjia.data.Payment
 import com.wrh.keshiguanjia.logic.Billing
 import com.wrh.keshiguanjia.logic.BillingDraft
 import com.wrh.keshiguanjia.logic.MoneyUtils
+import com.wrh.keshiguanjia.ui.schedule.ShareButton
+import com.wrh.keshiguanjia.ui.schedule.ShareableBox
+import com.wrh.keshiguanjia.ui.schedule.rememberCaptureState
 import java.time.LocalDate
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.flow
+import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
@@ -58,6 +65,7 @@ import kotlinx.coroutines.launch
 class StudentDetailViewModel(
     studentRepository: com.wrh.keshiguanjia.data.StudentRepository,
     private val enrollmentRepository: com.wrh.keshiguanjia.data.EnrollmentRepository,
+    private val scheduleRepository: com.wrh.keshiguanjia.data.ScheduleRepository,
     private val studentId: Long,
 ) : ViewModel() {
 
@@ -73,6 +81,52 @@ class StudentDetailViewModel(
         enrollmentRepository.observePaymentsForStudent(studentId)
             .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyList())
 
+    // ---- 该学生的课表（周/月，仅其报名的班级，标注出勤） ----
+
+    private val weekMonday = java.time.LocalDate.now()
+
+    private val _month = MutableStateFlow(java.time.YearMonth.now())
+    val month: StateFlow<java.time.YearMonth> = _month.asStateFlow()
+
+    fun prevMonth() {
+        _month.value = _month.value.minusMonths(1)
+    }
+
+    fun nextMonth() {
+        _month.value = _month.value.plusMonths(1)
+    }
+
+    val weekDates: List<java.time.LocalDate> = (0..6).map { weekMonday.plusDays(it.toLong()) }
+
+    val weekLessons: StateFlow<Map<java.time.LocalDate, List<com.wrh.keshiguanjia.logic.DayLesson>>> = combine(
+        enrollments, scheduleRepository.observeClassesWithTimes(), scheduleRepository.observeOverrides(),
+    ) { enrolls, classes, overrides ->
+        val ids = enrolls.map { it.clazz.id }.toSet()
+        val mine = classes.filter { it.clazz.id in ids }
+        weekDates.associateWith { com.wrh.keshiguanjia.logic.ScheduleLogic.lessonsForDate(mine, overrides, it) }
+    }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyMap())
+
+    val monthLessons: StateFlow<Map<java.time.LocalDate, List<com.wrh.keshiguanjia.logic.DayLesson>>> = combine(
+        enrollments, scheduleRepository.observeClassesWithTimes(), scheduleRepository.observeOverrides(), _month,
+    ) { enrolls, classes, overrides, m ->
+        val ids = enrolls.map { it.clazz.id }.toSet()
+        val mine = classes.filter { it.clazz.id in ids }
+        com.wrh.keshiguanjia.logic.ScheduleLogic.lessonsForMonth(mine, overrides, m)
+    }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyMap())
+
+    /** key = "date|classId" → 出勤状态 */
+    val attendanceByKey: StateFlow<Map<String, Int>> =
+        enrollmentRepository.observeAttendanceForStudent(studentId)
+            .map { list ->
+                list.associate { "${it.date}|${it.classId}" to it.status }
+            }
+            .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyMap())
+
+    /** enrollmentId → 已消课次数（到课+缺勤） */
+    val consumedByEnrollment: StateFlow<Map<Long, Int>> =
+        enrollmentRepository.observeConsumedForStudent(studentId)
+            .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyMap())
+
     fun renew(enrollment: EnrollmentWithDetails, draft: BillingDraft, onResult: (String?) -> Unit) {
         viewModelScope.launch {
             Billing.validate(draft.copy(classId = enrollment.enrollment.classId))?.let { onResult(it) }
@@ -87,7 +141,9 @@ class StudentDetailViewModel(
         fun factory(studentId: Long) = object : ViewModelProvider.Factory {
             @Suppress("UNCHECKED_CAST")
             override fun <T : ViewModel> create(modelClass: Class<T>): T =
-                StudentDetailViewModel(Graph.studentRepository, Graph.enrollmentRepository, studentId) as T
+                StudentDetailViewModel(
+                    Graph.studentRepository, Graph.enrollmentRepository, Graph.scheduleRepository, studentId,
+                ) as T
         }
     }
 }
@@ -107,6 +163,7 @@ fun StudentDetailScreen(
     val student by vm.student.collectAsStateWithLifecycle()
     val enrollments by vm.enrollments.collectAsStateWithLifecycle()
     val payments by vm.payments.collectAsStateWithLifecycle()
+    val consumedByEnrollment by vm.consumedByEnrollment.collectAsStateWithLifecycle()
     var renewTarget by remember { mutableStateOf<EnrollmentWithDetails?>(null) }
 
     Column(
@@ -171,12 +228,14 @@ fun StudentDetailScreen(
                         )
                     }
                     if (ew.enrollment.billingType == Enrollment.BILLING_SESSIONS) {
-                        val total = Billing.purchasedSessions(ew.packages)
+                        val purchased = Billing.purchasedSessions(ew.packages)
+                        val consumed = consumedByEnrollment[ew.enrollment.id] ?: 0
+                        val remaining = Billing.remainingSessions(ew.packages, consumed)
                         val validUntil = ew.packages.mapNotNull { it.validUntil }.minOrNull()
                         Text(
-                            "已购 $total 次" + (validUntil?.let { "，有效期至 $it" } ?: ""),
+                            "剩余 $remaining 次（已购 $purchased）" + (validUntil?.let { "，有效期至 $it" } ?: ""),
                             style = MaterialTheme.typography.bodySmall,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            color = if (remaining <= 3) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.onSurfaceVariant,
                         )
                     } else {
                         val until = Billing.termValidUntil(ew.termRecords.map { it.endDate })
@@ -194,6 +253,8 @@ fun StudentDetailScreen(
             onClick = onEnroll,
             modifier = Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 6.dp),
         ) { Text("报名新班级") }
+
+        StudentScheduleSection(vm)
 
         SectionTitle("缴费记录（${payments.size}）")
         if (payments.isEmpty()) {
@@ -325,4 +386,103 @@ private fun RenewDialog(
         },
         dismissButton = { TextButton(onClick = onDismiss) { Text("取消") } },
     )
+}
+
+/** 学生本人的课表：周/月切换 + 出勤标记 + 一键分享截图。 */
+@Composable
+private fun StudentScheduleSection(vm: StudentDetailViewModel) {
+    val weekLessons by vm.weekLessons.collectAsStateWithLifecycle()
+    val monthLessons by vm.monthLessons.collectAsStateWithLifecycle()
+    val month by vm.month.collectAsStateWithLifecycle()
+    val attendanceByKey by vm.attendanceByKey.collectAsStateWithLifecycle()
+    var mode by remember { mutableStateOf(0) }
+    var selectedDay by remember { mutableStateOf<java.time.LocalDate?>(null) }
+    val capture = rememberCaptureState()
+
+    SectionTitle("我的课表")
+    Row(
+        Modifier.fillMaxWidth().padding(horizontal = 12.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        FilterChip(selected = mode == 0, onClick = { mode = 0 }, label = { Text("周") })
+        FilterChip(selected = mode == 1, onClick = { mode = 1 }, label = { Text("月") }, modifier = Modifier.padding(start = 6.dp))
+        androidx.compose.foundation.layout.Spacer(Modifier.weight(1f))
+        ShareButton(capture, "schedule-student-${mode}.png")
+    }
+
+    ShareableBox(
+        capture,
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(horizontal = 12.dp)
+            .heightIn(min = if (mode == 0) 230.dp else 430.dp),
+    ) {
+        if (mode == 0) {
+            com.wrh.keshiguanjia.ui.schedule.WeeklySchedule(
+                weekDates = vm.weekDates,
+                lessonsByDate = weekLessons,
+                modifier = Modifier.fillMaxWidth().heightIn(min = 230.dp),
+                lessonTrailing = { lesson, date ->
+                    val status = attendanceByKey["${date}|${lesson.classId}"]
+                    if (status != null) {
+                        Text(
+                            Attendance.STATUS_LABELS.getOrElse(status) { "" },
+                            style = MaterialTheme.typography.labelSmall,
+                            color = when (status) {
+                                Attendance.STATUS_ATTENDED -> MaterialTheme.colorScheme.primary
+                                Attendance.STATUS_LEAVE -> MaterialTheme.colorScheme.tertiary
+                                else -> MaterialTheme.colorScheme.error
+                            },
+                        )
+                    }
+                },
+            )
+        } else {
+            com.wrh.keshiguanjia.ui.schedule.MonthSchedule(
+                month = month,
+                lessonsByDate = monthLessons,
+                onPrev = vm::prevMonth,
+                onNext = vm::nextMonth,
+                onDayClick = { selectedDay = it },
+                modifier = Modifier.fillMaxWidth(),
+            )
+        }
+    }
+
+    selectedDay?.let { day ->
+        val lessons = (if (mode == 1) monthLessons[day] else weekLessons[day]).orEmpty()
+        AlertDialog(
+            onDismissRequest = { selectedDay = null },
+            title = { Text("${day.monthValue} 月 ${day.dayOfMonth} 日") },
+            text = {
+                Column {
+                    if (lessons.isEmpty()) Text("当日无课", color = MaterialTheme.colorScheme.outline)
+                    lessons.forEach { lesson ->
+                        Column(Modifier.padding(vertical = 4.dp)) {
+                            Text(
+                                com.wrh.keshiguanjia.logic.TimeUtils.minutesToText(lesson.startMinute) + " - " +
+                                    com.wrh.keshiguanjia.logic.TimeUtils.minutesToText(lesson.endMinute) +
+                                    (if (lesson.isCancelled) " · 已停课" else "") +
+                                    (if (lesson.isExtra) " · 加课" else ""),
+                                style = MaterialTheme.typography.labelMedium,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            )
+                            Row(verticalAlignment = Alignment.CenterVertically) {
+                                Text(lesson.className, style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.SemiBold)
+                                val status = attendanceByKey["${day}|${lesson.classId}"]
+                                if (status != null && !lesson.isCancelled) {
+                                    Text(
+                                        "  ·  " + Attendance.STATUS_LABELS.getOrElse(status) { "" },
+                                        style = MaterialTheme.typography.labelSmall,
+                                        color = MaterialTheme.colorScheme.primary,
+                                    )
+                                }
+                            }
+                        }
+                    }
+                }
+            },
+            confirmButton = { TextButton(onClick = { selectedDay = null }) { Text("关闭") } },
+        )
+    }
 }

@@ -25,6 +25,7 @@ import androidx.navigation.compose.rememberNavController
 import com.wrh.keshiguanjia.ui.classes.ClassEditScreen
 import com.wrh.keshiguanjia.ui.classes.ClassListScreen
 import com.wrh.keshiguanjia.ui.home.HomeScreen
+import com.wrh.keshiguanjia.ui.rollcall.RollCallScreen
 import com.wrh.keshiguanjia.ui.students.EnrollScreen
 import com.wrh.keshiguanjia.ui.students.StudentDetailScreen
 import com.wrh.keshiguanjia.ui.students.StudentEditScreen
@@ -38,11 +39,13 @@ object Routes {
     const val CLASS_EDIT = "class/{classId}"
     const val STUDENT_DETAIL = "student_detail/{studentId}"
     const val ENROLL = "enroll/{studentId}"
+    const val ROLLCALL = "rollcall/{classId}/{date}"
 
     fun studentEdit(id: Long) = "student/$id"
     fun classEdit(id: Long) = "class/$id"
     fun studentDetail(id: Long) = "student_detail/$id"
     fun enroll(id: Long) = "enroll/$id"
+    fun rollCall(classId: Long, dateIso: String) = "rollcall/$classId/$dateIso"
 }
 
 private data class TopLevelDestination(val route: String, val label: String, val icon: ImageVector)
@@ -88,7 +91,13 @@ fun KeshiApp() {
                 .fillMaxSize()
                 .padding(padding),
         ) {
-            composable(Routes.HOME) { HomeScreen() }
+            composable(Routes.HOME) {
+                HomeScreen(
+                    onOpenRollCall = { classId, date ->
+                        navController.navigate(Routes.rollCall(classId, date.toString()))
+                    }
+                )
+            }
             composable(Routes.STUDENTS) {
                 StudentListScreen(
                     onAdd = { navController.navigate(Routes.studentEdit(-1L)) },
@@ -118,6 +127,11 @@ fun KeshiApp() {
             composable(Routes.ENROLL) { entry ->
                 val id = entry.arguments?.getString("studentId")?.toLongOrNull() ?: -1L
                 EnrollScreen(studentId = id, onDone = { navController.popBackStack() })
+            }
+            composable(Routes.ROLLCALL) { entry ->
+                val classId = entry.arguments?.getString("classId")?.toLongOrNull() ?: -1L
+                val dateIso = entry.arguments?.getString("date") ?: ""
+                RollCallScreen(classId = classId, dateIso = dateIso, onBack = { navController.popBackStack() })
             }
         }
     }

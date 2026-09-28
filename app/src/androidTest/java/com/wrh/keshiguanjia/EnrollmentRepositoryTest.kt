@@ -35,7 +35,7 @@ class EnrollmentRepositoryTest {
             .allowMainThreadQueries()
             .build()
         repo = com.wrh.keshiguanjia.data.EnrollmentRepository(
-            db.enrollmentDao(), db.classPackageDao(), db.termRecordDao(), db.paymentDao(), db,
+            db.enrollmentDao(), db.classPackageDao(), db.termRecordDao(), db.paymentDao(), db, db.attendanceDao(),
         )
         studentId = db.studentDao().insert(Student(name = "Tom"))
         classId = db.classDao().insert(ClassRoom(name = "Math A", subject = "Math"))

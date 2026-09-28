@@ -21,9 +21,13 @@ data class BillingDraft(
 
 object Billing {
 
-    /** 已购总次数 = 各课时包（购买 + 赠送）之和。M3 起再减去已消课次。 */
+    /** 已购总次数 = 各课时包（购买 + 赠送）之和。 */
     fun purchasedSessions(packages: List<com.wrh.keshiguanjia.data.ClassPackage>): Int =
         packages.sumOf { it.totalSessions + it.bonusSessions }
+
+    /** 剩余次数 = 已购总次数 − 已消课次数（到课与缺勤扣次，请假不扣）。可为负，交由界面高亮提示。 */
+    fun remainingSessions(packages: List<com.wrh.keshiguanjia.data.ClassPackage>, consumed: Int): Int =
+        purchasedSessions(packages) - consumed
 
     /** 学期制的当前有效期终点（取最晚的结束日期）。 */
     fun termValidUntil(termEndDates: List<String>): String? =
