@@ -66,7 +66,7 @@ class ClassEditViewModel(
     data class UiState(
         val name: String = "",
         val subject: String = "",
-        val closed: Boolean = false,
+        val status: Int = ClassRoom.STATUS_OPEN,
         val note: String = "",
         val times: List<ClassTimeDraft> = listOf(ClassTimeDraft()),
         val isNew: Boolean = true,
@@ -94,7 +94,7 @@ class ClassEditViewModel(
                         UiState(
                             name = cw.clazz.name,
                             subject = cw.clazz.subject,
-                            closed = cw.clazz.status == ClassRoom.STATUS_CLOSED,
+                            status = cw.clazz.status,
                             note = cw.clazz.note,
                             times = ClassTimeExpansion.collapse(cw.times),
                             isNew = false,
@@ -114,7 +114,7 @@ class ClassEditViewModel(
     fun onName(v: String) = _state.update { it.copy(name = v, error = null) }
     fun onSubject(v: String) = _state.update { it.copy(subject = v) }
     fun onNote(v: String) = _state.update { it.copy(note = v) }
-    fun onClosed(v: Boolean) = _state.update { it.copy(closed = v) }
+    fun onStatus(v: Int) = _state.update { it.copy(status = v) }
 
     fun addTime() = _state.update { it.copy(times = it.times + ClassTimeDraft(), error = null) }
     fun removeTime(index: Int) = _state.update { s ->
@@ -145,7 +145,7 @@ class ClassEditViewModel(
                 id = if (s.isNew) 0L else classId,
                 name = s.name.trim(),
                 subject = s.subject.trim(),
-                status = if (s.closed) ClassRoom.STATUS_CLOSED else ClassRoom.STATUS_OPEN,
+                status = s.status,
                 note = s.note.trim(),
             ),
             times,
@@ -229,18 +229,18 @@ fun ClassEditScreen(classId: Long, onDone: () -> Unit) {
         )
         Row(Modifier.padding(top = 8.dp), verticalAlignment = Alignment.CenterVertically) {
             Text("状态：", style = MaterialTheme.typography.bodyMedium)
-            FilterChip(
-                selected = !state.closed,
-                onClick = { vm.onClosed(false) },
-                label = { Text("开班") },
-                modifier = Modifier.padding(start = 4.dp),
-            )
-            FilterChip(
-                selected = state.closed,
-                onClick = { vm.onClosed(true) },
-                label = { Text("结班") },
-                modifier = Modifier.padding(start = 8.dp),
-            )
+            listOf(
+                ClassRoom.STATUS_OPEN to "开班",
+                ClassRoom.STATUS_BOOKED to "预定",
+                ClassRoom.STATUS_CLOSED to "结班",
+            ).forEachIndexed { i, (value, label) ->
+                FilterChip(
+                    selected = state.status == value,
+                    onClick = { vm.onStatus(value) },
+                    label = { Text(label) },
+                    modifier = Modifier.padding(start = if (i == 0) 4.dp else 8.dp),
+                )
+            }
         }
 
         Text(

@@ -88,6 +88,13 @@ class EnrollmentRepository(
 
     suspend fun deletePaymentById(id: Long) = paymentDao.deleteById(id)
 
+    // ---- 计费记录的修改/删除（录错更正）----
+
+    suspend fun updatePackage(packageItem: ClassPackage) = packageDao.update(packageItem)
+    suspend fun deletePackageById(id: Long) = packageDao.deleteById(id)
+    suspend fun updateTerm(term: TermRecord) = termDao.update(term)
+    suspend fun deleteTermById(id: Long) = termDao.deleteById(id)
+
     // ---- 点名消课（M3）----
 
     fun observeForClass(classId: Long): Flow<List<EnrollmentWithDetails>> =

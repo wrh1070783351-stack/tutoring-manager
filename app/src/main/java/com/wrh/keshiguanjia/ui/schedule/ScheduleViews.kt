@@ -14,6 +14,7 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
@@ -134,7 +135,23 @@ private fun shareImage(context: Context, bitmap: ImageBitmap, fileName: String) 
     context.startActivity(Intent.createChooser(intent, "分享课表截图"))
 }
 
-/** 周视图（竖向日程式：按天分组，今天自动滚动到顶部附近）。 */
+/** 班级专属色：按 classId 稳定取色，让不同班级在所有课表里颜色一致、易于区分。 */
+private val CLASS_PALETTE = listOf(
+    0xFF0E7490, // 青
+    0xFF2563EB, // 蓝
+    0xFF7C3AED, // 紫
+    0xFFDB2777, // 玫红
+    0xFFEA580C, // 橙
+    0xFF16A34A, // 绿
+    0xFFB45309, // 棕
+    0xFF0F766E, // 深青
+)
+
+fun classColor(classId: Long) = androidx.compose.ui.graphics.Color(
+    CLASS_PALETTE[(classId % CLASS_PALETTE.size).toInt()]
+)
+
+/** 周视图（竖向日程式：按天分组，浅色圆角块隔断，今天自动滚动到顶部附近）。 */
 @Composable
 fun WeeklySchedule(
     weekDates: List<LocalDate>,
@@ -157,58 +174,82 @@ fun WeeklySchedule(
             item(key = date.toString()) {
                 val lessons = lessonsByDate[date].orEmpty()
                 val isToday = date == today
-                Text(
-                    TimeUtils.dayLabel(date.dayOfWeek.value) +
-                        " ${date.monthValue}/${date.dayOfMonth}" +
-                        (if (isToday) " · 今天" else ""),
-                    style = MaterialTheme.typography.titleSmall,
-                    fontWeight = FontWeight.Bold,
-                    color = if (isToday) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurface,
-                    modifier = Modifier.padding(top = 10.dp, bottom = 4.dp),
-                )
-                if (lessons.isEmpty()) {
+                Column(
+                    Modifier
+                        .fillMaxWidth()
+                        .padding(top = 8.dp)
+                        .background(
+                            if (isToday) {
+                                MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.45f)
+                            } else {
+                                MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.45f)
+                            },
+                            androidx.compose.foundation.shape.RoundedCornerShape(14.dp),
+                        )
+                        .padding(horizontal = 12.dp, vertical = 8.dp),
+                ) {
                     Text(
-                        "无课",
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.outline,
-                        modifier = Modifier.padding(bottom = 4.dp),
+                        TimeUtils.dayLabel(date.dayOfWeek.value) +
+                            " ${date.monthValue}/${date.dayOfMonth}" +
+                            (if (isToday) " · 今天" else ""),
+                        style = MaterialTheme.typography.titleSmall,
+                        fontWeight = FontWeight.Bold,
+                        color = if (isToday) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant,
                     )
-                }
-                lessons.forEachIndexed { index, lesson ->
-                    if (index > 0) HorizontalDivider()
-                    Row(
-                        Modifier
-                            .fillMaxWidth()
-                            .padding(vertical = 8.dp),
-                        verticalAlignment = Alignment.CenterVertically,
-                    ) {
-                        Column(Modifier.weight(1f)) {
-                            Text(
-                                TimeUtils.minutesToText(lesson.startMinute) + " - " +
-                                    TimeUtils.minutesToText(lesson.endMinute) +
-                                    (if (lesson.isCancelled) " · 已停课" else "") +
-                                    (if (lesson.isExtra) " · 加课" else ""),
-                                style = MaterialTheme.typography.labelMedium,
-                                color = if (lesson.isCancelled) MaterialTheme.colorScheme.outline
-                                else MaterialTheme.colorScheme.onSurfaceVariant,
+                    if (lessons.isEmpty()) {
+                        Text(
+                            "无课",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.outline,
+                            modifier = Modifier.padding(top = 4.dp, bottom = 2.dp),
+                        )
+                    }
+                    lessons.forEachIndexed { index, lesson ->
+                        if (index > 0) HorizontalDivider(color = MaterialTheme.colorScheme.outline.copy(alpha = 0.15f))
+                        Row(
+                            Modifier
+                                .fillMaxWidth()
+                                .padding(vertical = 8.dp),
+                            verticalAlignment = Alignment.CenterVertically,
+                        ) {
+                            Box(
+                                Modifier
+                                    .padding(end = 10.dp)
+                                    .width(4.dp)
+                                    .height(38.dp)
+                                    .background(
+                                        if (lesson.isCancelled) MaterialTheme.colorScheme.outline else classColor(lesson.classId),
+                                        androidx.compose.foundation.shape.RoundedCornerShape(2.dp),
+                                    ),
                             )
-                            Text(
-                                lesson.className,
-                                style = MaterialTheme.typography.bodyMedium,
-                                fontWeight = FontWeight.SemiBold,
-                                color = if (lesson.isCancelled) MaterialTheme.colorScheme.outline
-                                else MaterialTheme.colorScheme.onSurface,
-                            )
-                            val extras = listOf(lesson.subject, lesson.room).filter { it.isNotBlank() }
-                            if (extras.isNotEmpty()) {
+                            Column(Modifier.weight(1f)) {
                                 Text(
-                                    extras.joinToString(" · "),
-                                    style = MaterialTheme.typography.bodySmall,
-                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                    TimeUtils.minutesToText(lesson.startMinute) + " - " +
+                                        TimeUtils.minutesToText(lesson.endMinute) +
+                                        (if (lesson.isCancelled) " · 已停课" else "") +
+                                        (if (lesson.isExtra) " · 加课" else ""),
+                                    style = MaterialTheme.typography.labelMedium,
+                                    color = if (lesson.isCancelled) MaterialTheme.colorScheme.outline
+                                    else MaterialTheme.colorScheme.onSurfaceVariant,
                                 )
+                                Text(
+                                    lesson.className,
+                                    style = MaterialTheme.typography.bodyMedium,
+                                    fontWeight = FontWeight.SemiBold,
+                                    color = if (lesson.isCancelled) MaterialTheme.colorScheme.outline
+                                    else classColor(lesson.classId),
+                                )
+                                val extras = listOf(lesson.subject, lesson.room).filter { it.isNotBlank() }
+                                if (extras.isNotEmpty()) {
+                                    Text(
+                                        extras.joinToString(" · "),
+                                        style = MaterialTheme.typography.bodySmall,
+                                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                    )
+                                }
                             }
+                            lessonTrailing(lesson, date)
                         }
-                        lessonTrailing(lesson, date)
                     }
                 }
             }
@@ -282,7 +323,9 @@ fun MonthSchedule(
                                         fontSize = 8.sp,
                                         lineHeight = 10.sp,
                                         maxLines = 1,
-                                        color = if (lesson.isCancelled) MaterialTheme.colorScheme.outline else MaterialTheme.colorScheme.onSurface,
+                                        fontWeight = FontWeight.SemiBold,
+                                        color = if (lesson.isCancelled) MaterialTheme.colorScheme.outline
+                                        else classColor(lesson.classId),
                                     )
                                 }
                                 if (lessons.size > 2) {

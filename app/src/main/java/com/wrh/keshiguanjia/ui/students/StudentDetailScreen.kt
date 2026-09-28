@@ -162,6 +162,22 @@ class StudentDetailViewModel(
         }
     }
 
+    fun updatePackage(pkg: com.wrh.keshiguanjia.data.ClassPackage) = viewModelScope.launch {
+        enrollmentRepository.updatePackage(pkg)
+    }
+
+    fun deletePackage(id: Long) = viewModelScope.launch {
+        enrollmentRepository.deletePackageById(id)
+    }
+
+    fun updateTerm(term: com.wrh.keshiguanjia.data.TermRecord) = viewModelScope.launch {
+        enrollmentRepository.updateTerm(term)
+    }
+
+    fun deleteTerm(id: Long) = viewModelScope.launch {
+        enrollmentRepository.deleteTermById(id)
+    }
+
     companion object {
         fun factory(studentId: Long) = object : ViewModelProvider.Factory {
             @Suppress("UNCHECKED_CAST")
@@ -191,6 +207,10 @@ fun StudentDetailScreen(
     val consumedByEnrollment by vm.consumedByEnrollment.collectAsStateWithLifecycle()
     var renewTarget by remember { mutableStateOf<EnrollmentWithDetails?>(null) }
     var payTarget by remember { mutableStateOf<Pair<EnrollmentWithDetails, Long>?>(null) }
+    var editPkgTarget by remember { mutableStateOf<com.wrh.keshiguanjia.data.ClassPackage?>(null) }
+    var deletePkgTarget by remember { mutableStateOf<com.wrh.keshiguanjia.data.ClassPackage?>(null) }
+    var editTermTarget by remember { mutableStateOf<com.wrh.keshiguanjia.data.TermRecord?>(null) }
+    var deleteTermTarget by remember { mutableStateOf<com.wrh.keshiguanjia.data.TermRecord?>(null) }
 
     Column(
         Modifier
@@ -269,6 +289,22 @@ fun StudentDetailScreen(
                             (until?.let { "有效期至 $it" } ?: "未设置期限"),
                             style = MaterialTheme.typography.bodySmall,
                             color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        )
+                    }
+                    // 每条计费记录可编辑/删除（录错更正）
+                    ew.packages.forEach { pkg ->
+                        BillingRecordRow(
+                            label = "课时包 ${pkg.totalSessions}+${pkg.bonusSessions}次 · ¥" + MoneyUtils.yuanText(pkg.amountCents) +
+                                (pkg.validUntil?.let { " · 至 $it" } ?: ""),
+                            onEdit = { editPkgTarget = pkg },
+                            onDelete = { deletePkgTarget = pkg },
+                        )
+                    }
+                    ew.termRecords.forEach { term ->
+                        BillingRecordRow(
+                            label = "学期 ${term.startDate} ~ ${term.endDate} · ¥" + MoneyUtils.yuanText(term.amountCents),
+                            onEdit = { editTermTarget = term },
+                            onDelete = { deleteTermTarget = term },
                         )
                     }
                     // 定课与缴费分离：约定金额已记在课时包/学期里，实收看缴费记录
@@ -351,6 +387,47 @@ fun StudentDetailScreen(
         ) { cents, method, date, onResult ->
             vm.registerPayment(target, cents, method, date, onResult)
         }
+    }
+
+    editPkgTarget?.let { pkg ->
+        EditPackageDialog(pkg = pkg, onDismiss = { editPkgTarget = null }, onSave = {
+            vm.updatePackage(it)
+            editPkgTarget = null
+        })
+    }
+    deletePkgTarget?.let { pkg ->
+        AlertDialog(
+            onDismissRequest = { deletePkgTarget = null },
+            title = { Text("删除课时包") },
+            text = { Text("删除后该包次数将从余额中扣除统计，确定删除？") },
+            confirmButton = {
+                TextButton(onClick = {
+                    vm.deletePackage(pkg.id)
+                    deletePkgTarget = null
+                }) { Text("删除", color = MaterialTheme.colorScheme.error) }
+            },
+            dismissButton = { TextButton(onClick = { deletePkgTarget = null }) { Text("取消") } },
+        )
+    }
+    editTermTarget?.let { term ->
+        EditTermDialog(term = term, onDismiss = { editTermTarget = null }, onSave = {
+            vm.updateTerm(it)
+            editTermTarget = null
+        })
+    }
+    deleteTermTarget?.let { term ->
+        AlertDialog(
+            onDismissRequest = { deleteTermTarget = null },
+            title = { Text("删除学期记录") },
+            text = { Text("确定删除该学期记录（${term.startDate} ~ ${term.endDate}）？") },
+            confirmButton = {
+                TextButton(onClick = {
+                    vm.deleteTerm(term.id)
+                    deleteTermTarget = null
+                }) { Text("删除", color = MaterialTheme.colorScheme.error) }
+            },
+            dismissButton = { TextButton(onClick = { deleteTermTarget = null }) { Text("取消") } },
+        )
     }
 }
 
@@ -555,6 +632,115 @@ private fun StudentScheduleSection(vm: StudentDetailViewModel) {
             confirmButton = { TextButton(onClick = { selectedDay = null }) { Text("关闭") } },
         )
     }
+}
+
+/** 计费记录行：文案 + 编辑/删除。 */
+@Composable
+private fun BillingRecordRow(label: String, onEdit: () -> Unit, onDelete: () -> Unit) {
+    Row(
+        Modifier.fillMaxWidth(),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Text(
+            label,
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            modifier = Modifier.weight(1f),
+        )
+        TextButton(onClick = onEdit) { Text("编辑") }
+        TextButton(onClick = onDelete) { Text("删除", color = MaterialTheme.colorScheme.error) }
+    }
+}
+
+/** 编辑课时包（录错更正，不产生缴费流水）。 */
+@Composable
+private fun EditPackageDialog(
+    pkg: com.wrh.keshiguanjia.data.ClassPackage,
+    onDismiss: () -> Unit,
+    onSave: (com.wrh.keshiguanjia.data.ClassPackage) -> Unit,
+) {
+    var sessionsText by remember { mutableStateOf(pkg.totalSessions.toString()) }
+    var bonusText by remember { mutableStateOf(pkg.bonusSessions.toString()) }
+    var amountText by remember { mutableStateOf(MoneyUtils.yuanText(pkg.amountCents)) }
+    var validUntilText by remember { mutableStateOf(pkg.validUntil ?: "") }
+    var error by remember { mutableStateOf<String?>(null) }
+
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text("编辑课时包") },
+        text = {
+            Column {
+                OutlinedTextField(sessionsText, { sessionsText = it; error = null }, label = { Text("购买次数") }, singleLine = true, modifier = Modifier.fillMaxWidth())
+                OutlinedTextField(bonusText, { bonusText = it }, label = { Text("赠送次数") }, singleLine = true, modifier = Modifier.fillMaxWidth().padding(top = 6.dp))
+                OutlinedTextField(validUntilText, { validUntilText = it }, label = { Text("有效期（yyyy-MM-dd，可清空）") }, singleLine = true, modifier = Modifier.fillMaxWidth().padding(top = 6.dp))
+                OutlinedTextField(amountText, { amountText = it; error = null }, label = { Text("金额（元）") }, singleLine = true, modifier = Modifier.fillMaxWidth().padding(top = 6.dp))
+                if (error != null) {
+                    Text(error!!, color = MaterialTheme.colorScheme.error, style = MaterialTheme.typography.bodySmall, modifier = Modifier.padding(top = 6.dp))
+                }
+            }
+        },
+        confirmButton = {
+            Button(onClick = {
+                val sessions = sessionsText.toIntOrNull()
+                val amountCents = MoneyUtils.parseYuanToCents(amountText)
+                when {
+                    sessions == null || sessions <= 0 -> error = "购买次数必须大于 0"
+                    amountCents == null -> error = "金额格式错误"
+                    else -> onSave(
+                        pkg.copy(
+                            totalSessions = sessions,
+                            bonusSessions = bonusText.toIntOrNull() ?: 0,
+                            amountCents = amountCents ?: pkg.amountCents,
+                            validUntil = validUntilText.trim().ifBlank { null },
+                        )
+                    )
+                }
+            }) { Text("保存") }
+        },
+        dismissButton = { TextButton(onClick = onDismiss) { Text("取消") } },
+    )
+}
+
+/** 编辑学期记录。 */
+@Composable
+private fun EditTermDialog(
+    term: com.wrh.keshiguanjia.data.TermRecord,
+    onDismiss: () -> Unit,
+    onSave: (com.wrh.keshiguanjia.data.TermRecord) -> Unit,
+) {
+    var startDate by remember { mutableStateOf(term.startDate) }
+    var endDate by remember { mutableStateOf(term.endDate) }
+    var amountText by remember { mutableStateOf(MoneyUtils.yuanText(term.amountCents)) }
+    var error by remember { mutableStateOf<String?>(null) }
+
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text("编辑学期记录") },
+        text = {
+            Column {
+                OutlinedTextField(startDate, { startDate = it; error = null }, label = { Text("开始日期（yyyy-MM-dd）") }, singleLine = true, modifier = Modifier.fillMaxWidth())
+                OutlinedTextField(endDate, { endDate = it; error = null }, label = { Text("结束日期") }, singleLine = true, modifier = Modifier.fillMaxWidth().padding(top = 6.dp))
+                OutlinedTextField(amountText, { amountText = it; error = null }, label = { Text("金额（元）") }, singleLine = true, modifier = Modifier.fillMaxWidth().padding(top = 6.dp))
+                if (error != null) {
+                    Text(error!!, color = MaterialTheme.colorScheme.error, style = MaterialTheme.typography.bodySmall, modifier = Modifier.padding(top = 6.dp))
+                }
+            }
+        },
+        confirmButton = {
+            Button(onClick = {
+                val amountCents = MoneyUtils.parseYuanToCents(amountText)
+                when {
+                    Billing.dateOrNull(startDate) == null || Billing.dateOrNull(endDate) == null -> error = "日期格式应为 yyyy-MM-dd"
+                    startDate > endDate -> error = "开始日期必须早于或等于结束日期"
+                    amountCents == null -> error = "金额格式错误"
+                    else -> onSave(
+                        term.copy(startDate = startDate.trim(), endDate = endDate.trim(), amountCents = amountCents ?: term.amountCents)
+                    )
+                }
+            }) { Text("保存") }
+        },
+        dismissButton = { TextButton(onClick = onDismiss) { Text("取消") } },
+    )
 }
 
 /** 登记缴费（欠款到账）。 */

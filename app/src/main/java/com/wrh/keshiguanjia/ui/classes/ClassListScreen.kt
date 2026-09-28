@@ -87,10 +87,13 @@ fun ClassListScreen(onEdit: (Long) -> Unit) {
                         ListItem(
                             headlineContent = {
                                 Text(
-                                    cw.clazz.name + if (cw.clazz.status == 1) "（已结班）" else "",
+                                    cw.clazz.name + com.wrh.keshiguanjia.data.ClassRoom.statusSuffix(cw.clazz.status),
                                     fontWeight = FontWeight.SemiBold,
-                                    color = if (cw.clazz.status == 1) MaterialTheme.colorScheme.outline
-                                    else MaterialTheme.colorScheme.onSurface,
+                                    color = when (cw.clazz.status) {
+                                        com.wrh.keshiguanjia.data.ClassRoom.STATUS_CLOSED -> MaterialTheme.colorScheme.outline
+                                        com.wrh.keshiguanjia.data.ClassRoom.STATUS_BOOKED -> MaterialTheme.colorScheme.tertiary
+                                        else -> MaterialTheme.colorScheme.onSurface
+                                    },
                                 )
                             },
                             supportingContent = {

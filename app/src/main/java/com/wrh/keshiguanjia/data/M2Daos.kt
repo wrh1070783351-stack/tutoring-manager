@@ -52,6 +52,12 @@ interface ClassPackageDao {
 
     @Insert
     suspend fun insert(packageItem: ClassPackage): Long
+
+    @Update
+    suspend fun update(packageItem: ClassPackage)
+
+    @Query("DELETE FROM class_packages WHERE id = :id")
+    suspend fun deleteById(id: Long)
 }
 
 @Dao
@@ -59,6 +65,12 @@ interface TermRecordDao {
 
     @Insert
     suspend fun insert(term: TermRecord): Long
+
+    @Update
+    suspend fun update(term: TermRecord)
+
+    @Query("DELETE FROM term_records WHERE id = :id")
+    suspend fun deleteById(id: Long)
 }
 
 @Dao
