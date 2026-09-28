@@ -112,6 +112,26 @@ class EnrollmentRepositoryTest {
     }
 
     @Test
+    fun enrollWithoutPayment_noPaymentRecord_thenRegisterLater() = runBlocking {
+        // 定课未缴费：计费记录存在，但没有任何缴费流水
+        repo.enroll(
+            studentId,
+            BillingDraft(
+                classId = classId, billingType = Enrollment.BILLING_SESSIONS,
+                sessions = 10, amountCents = 100000, payDate = "2026-09-29",
+                paymentReceived = false,
+            ),
+        )
+        assertTrue(repo.observePaymentsForStudent(studentId).first().isEmpty())
+
+        // 期末登记缴费 → 生成流水
+        repo.addPayment(studentId, enrollmentId = db.enrollmentDao().getById(1)!!.id, amountCents = 100000, dateIso = "2027-01-15", method = 2)
+        val payments = repo.observePaymentsForStudent(studentId).first()
+        assertEquals(1, payments.size)
+        assertEquals(100000L, payments[0].amountCents)
+    }
+
+    @Test
     fun deletingStudent_cascadesEverything() = runBlocking {
         val eid = repo.enroll(
             studentId,

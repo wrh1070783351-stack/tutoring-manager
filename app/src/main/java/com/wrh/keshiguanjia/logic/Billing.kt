@@ -10,13 +10,15 @@ data class BillingDraft(
     val bonusSessions: Int = 0,
     val startDate: String? = null,
     val endDate: String? = null,
-    /** 金额，单位：分 */
+    /** 金额，单位：分（约定价格；未收时也记录，便于期末对账） */
     val amountCents: Long = 0,
     val payDate: String,
     val method: Int = 0,
     val note: String = "",
     /** 次卡可选有效期，ISO 日期，空为不限 */
     val validUntil: String? = null,
+    /** false = 定课未缴费（期末一起结），不生成缴费记录 */
+    val paymentReceived: Boolean = true,
 )
 
 object Billing {

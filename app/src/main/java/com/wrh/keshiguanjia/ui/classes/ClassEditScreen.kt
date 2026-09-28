@@ -48,6 +48,7 @@ import com.wrh.keshiguanjia.data.ClassRoom
 import com.wrh.keshiguanjia.data.ClassTime
 import com.wrh.keshiguanjia.data.Graph
 import com.wrh.keshiguanjia.logic.ClassTimeDraft
+import com.wrh.keshiguanjia.logic.ClassTimeExpansion
 import com.wrh.keshiguanjia.logic.TimeUtils
 import com.wrh.keshiguanjia.logic.Validators
 import com.wrh.keshiguanjia.ui.TimePickerDialogM3
@@ -95,9 +96,7 @@ class ClassEditViewModel(
                             subject = cw.clazz.subject,
                             closed = cw.clazz.status == ClassRoom.STATUS_CLOSED,
                             note = cw.clazz.note,
-                            times = cw.times.map {
-                                ClassTimeDraft(it.dayOfWeek, it.startMinute, it.endMinute, it.room)
-                            },
+                            times = ClassTimeExpansion.collapse(cw.times),
                             isNew = false,
                             loaded = true,
                         )
@@ -132,7 +131,7 @@ class ClassEditViewModel(
             _state.update { it.copy(error = err) }
             return false
         }
-        val times = s.times.map {
+        val times = ClassTimeExpansion.expand(s.times).map {
             ClassTime(
                 classId = 0,
                 dayOfWeek = it.dayOfWeek,
@@ -253,19 +252,12 @@ fun ClassEditScreen(classId: Long, onDone: () -> Unit) {
             Card(Modifier.fillMaxWidth().padding(top = 8.dp)) {
                 Column(Modifier.padding(10.dp)) {
                     Row(verticalAlignment = Alignment.CenterVertically) {
-                        DayDropdown(
-                            selected = draft.dayOfWeek,
-                            onSelect = { vm.updateTime(index, draft.copy(dayOfWeek = it)) },
+                        Text(
+                            if (draft.days.isEmpty()) "选择上课星期："
+                            else draft.days.sorted().joinToString("、") { TimeUtils.dayLabel(it) },
+                            style = MaterialTheme.typography.bodyMedium,
+                            modifier = Modifier.weight(1f),
                         )
-                        Spacer(Modifier.width(8.dp))
-                        OutlinedButton(onClick = { editingTime = index to true }) {
-                            Text(TimeUtils.minutesToText(draft.startMinute))
-                        }
-                        Text(" 至 ", style = MaterialTheme.typography.bodyMedium)
-                        OutlinedButton(onClick = { editingTime = index to false }) {
-                            Text(TimeUtils.minutesToText(draft.endMinute))
-                        }
-                        Spacer(Modifier.weight(1f))
                         IconButton(
                             onClick = { vm.removeTime(index) },
                             enabled = state.times.size > 1,
@@ -273,13 +265,41 @@ fun ClassEditScreen(classId: Long, onDone: () -> Unit) {
                             Icon(Icons.Filled.Delete, contentDescription = "删除该时间段")
                         }
                     }
-                    OutlinedTextField(
-                        value = draft.room,
-                        onValueChange = { vm.updateTime(index, draft.copy(room = it)) },
-                        label = { Text("教室（可选）") },
-                        singleLine = true,
-                        modifier = Modifier.fillMaxWidth().padding(top = 4.dp),
-                    )
+                    Row(
+                        Modifier.fillMaxWidth().padding(top = 4.dp),
+                        horizontalArrangement = androidx.compose.foundation.layout.Arrangement.spacedBy(4.dp),
+                    ) {
+                        TimeUtils.WEEK_RANGE.forEach { day ->
+                            val selected = day in draft.days
+                            FilterChip(
+                                selected = selected,
+                                onClick = {
+                                    vm.updateTime(
+                                        index,
+                                        draft.copy(days = if (selected) draft.days - day else draft.days + day),
+                                    )
+                                },
+                                label = { Text(TimeUtils.dayLabel(day).removePrefix("周")) },
+                            )
+                        }
+                    }
+                    Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.padding(top = 6.dp)) {
+                        OutlinedButton(onClick = { editingTime = index to true }) {
+                            Text(TimeUtils.minutesToText(draft.startMinute))
+                        }
+                        Text(" 至 ", style = MaterialTheme.typography.bodyMedium)
+                        OutlinedButton(onClick = { editingTime = index to false }) {
+                            Text(TimeUtils.minutesToText(draft.endMinute))
+                        }
+                        Spacer(Modifier.width(12.dp))
+                        OutlinedTextField(
+                            value = draft.room,
+                            onValueChange = { vm.updateTime(index, draft.copy(room = it)) },
+                            label = { Text("教室（可选）") },
+                            singleLine = true,
+                            modifier = Modifier.weight(1f),
+                        )
+                    }
                 }
             }
         }
@@ -348,24 +368,5 @@ fun ClassEditScreen(classId: Long, onDone: () -> Unit) {
                 TextButton(onClick = { showDiscardConfirm = false }) { Text("继续编辑") }
             },
         )
-    }
-}
-
-@Composable
-private fun DayDropdown(selected: Int, onSelect: (Int) -> Unit) {
-    var expanded by remember { mutableStateOf(false) }
-    Column {
-        OutlinedButton(onClick = { expanded = true }) { Text(TimeUtils.dayLabel(selected)) }
-        DropdownMenu(expanded = expanded, onDismissRequest = { expanded = false }) {
-            TimeUtils.WEEK_RANGE.forEach { d ->
-                DropdownMenuItem(
-                    text = { Text(TimeUtils.dayLabel(d)) },
-                    onClick = {
-                        expanded = false
-                        onSelect(d)
-                    },
-                )
-            }
-        }
     }
 }

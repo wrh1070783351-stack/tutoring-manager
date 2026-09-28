@@ -60,7 +60,8 @@ class EnrollmentRepository(
                 )
             )
         }
-        if (draft.amountCents > 0) {
+        // 缴费记录：仅当场收到钱才生成；未收（期末结）时只有计费记录，欠款由详情页登记缴费补上
+        if (draft.paymentReceived && draft.amountCents > 0) {
             paymentDao.insert(
                 Payment(
                     studentId = studentId,
@@ -73,6 +74,17 @@ class EnrollmentRepository(
             )
         }
     }
+
+    /** 补记一笔缴费（登记欠款到账等）。 */
+    suspend fun addPayment(
+        studentId: Long, enrollmentId: Long?, amountCents: Long,
+        dateIso: String, method: Int, note: String = "",
+    ) = paymentDao.insert(
+        Payment(
+            studentId = studentId, enrollmentId = enrollmentId,
+            amountCents = amountCents, date = dateIso, method = method, note = note,
+        )
+    )
 
     suspend fun deletePaymentById(id: Long) = paymentDao.deleteById(id)
 

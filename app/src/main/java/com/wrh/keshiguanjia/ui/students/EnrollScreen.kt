@@ -73,6 +73,8 @@ class EnrollViewModel(
         val endDateText: String = LocalDate.now().plusMonths(4).toString(),
         val payDateText: String = LocalDate.now().toString(),
         val method: Int = 1,
+        /** true = 当场收费；false = 定课未缴费（期末一起结） */
+        val paidNow: Boolean = true,
         val error: String? = null,
     )
 
@@ -89,6 +91,7 @@ class EnrollViewModel(
     fun onEndDate(v: String) = _state.update { it.copy(endDateText = v, error = null) }
     fun onPayDate(v: String) = _state.update { it.copy(payDateText = v) }
     fun onMethod(v: Int) = _state.update { it.copy(method = v) }
+    fun onPaidNow(v: Boolean) = _state.update { it.copy(paidNow = v, error = null) }
 
     /** 保存成功返回 true。 */
     suspend fun save(): Boolean {
@@ -109,6 +112,7 @@ class EnrollViewModel(
             payDate = s.payDateText.trim(),
             method = s.method,
             validUntil = s.validUntilText.trim().ifBlank { null },
+            paymentReceived = s.paidNow,
         )
         Billing.validate(draft)?.let { err ->
             _state.update { it.copy(error = err) }
@@ -196,21 +200,45 @@ fun EnrollScreen(studentId: Long, onDone: () -> Unit) {
             OutlinedTextField(state.endDateText, vm::onEndDate, label = { Text("结束日期") }, singleLine = true, modifier = Modifier.fillMaxWidth().padding(top = 8.dp))
         }
 
-        OutlinedTextField(state.amountText, vm::onAmount, label = { Text("金额（元，可留空表示未收）") }, singleLine = true, modifier = Modifier.fillMaxWidth().padding(top = 8.dp))
+        OutlinedTextField(state.amountText, vm::onAmount, label = { Text("约定金额（元，可留空表示待定）") }, singleLine = true, modifier = Modifier.fillMaxWidth().padding(top = 8.dp))
 
-        Text("缴费日期", style = MaterialTheme.typography.titleSmall, modifier = Modifier.padding(top = 12.dp))
-        OutlinedTextField(state.payDateText, vm::onPayDate, label = { Text("yyyy-MM-dd") }, singleLine = true, modifier = Modifier.fillMaxWidth().padding(top = 4.dp))
-
-        Text("缴费方式", style = MaterialTheme.typography.titleSmall, modifier = Modifier.padding(top = 12.dp))
+        Text("缴费状态", style = MaterialTheme.typography.titleSmall, modifier = Modifier.padding(top = 12.dp))
         Row {
-            Payment.METHOD_LABELS.take(3).forEachIndexed { i, label ->
-                FilterChip(
-                    selected = state.method == i,
-                    onClick = { vm.onMethod(i) },
-                    label = { Text(label) },
-                    modifier = Modifier.padding(start = if (i == 0) 0.dp else 8.dp),
-                )
+            FilterChip(
+                selected = state.paidNow,
+                onClick = { vm.onPaidNow(true) },
+                label = { Text("已收") },
+            )
+            FilterChip(
+                selected = !state.paidNow,
+                onClick = { vm.onPaidNow(false) },
+                label = { Text("未收 · 期末结") },
+                modifier = Modifier.padding(start = 8.dp),
+            )
+        }
+
+        if (state.paidNow) {
+            Text("缴费日期", style = MaterialTheme.typography.titleSmall, modifier = Modifier.padding(top = 12.dp))
+            OutlinedTextField(state.payDateText, vm::onPayDate, label = { Text("yyyy-MM-dd") }, singleLine = true, modifier = Modifier.fillMaxWidth().padding(top = 4.dp))
+
+            Text("缴费方式", style = MaterialTheme.typography.titleSmall, modifier = Modifier.padding(top = 12.dp))
+            Row {
+                Payment.METHOD_LABELS.take(3).forEachIndexed { i, label ->
+                    FilterChip(
+                        selected = state.method == i,
+                        onClick = { vm.onMethod(i) },
+                        label = { Text(label) },
+                        modifier = Modifier.padding(start = if (i == 0) 0.dp else 8.dp),
+                    )
+                }
             }
+        } else {
+            Text(
+                "将登记为欠款，收款后可在学生详情页补记缴费",
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                modifier = Modifier.padding(top = 8.dp),
+            )
         }
         Spacer(Modifier.padding(bottom = 24.dp))
     }

@@ -13,11 +13,12 @@ import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
-import androidx.compose.foundation.lazy.LazyRow
-import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
@@ -32,6 +33,7 @@ import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -132,7 +134,7 @@ private fun shareImage(context: Context, bitmap: ImageBitmap, fileName: String) 
     context.startActivity(Intent.createChooser(intent, "分享课表截图"))
 }
 
-/** 周视图（7 天卡片横排）。 */
+/** 周视图（竖向日程式：按天分组，今天自动滚动到顶部附近）。 */
 @Composable
 fun WeeklySchedule(
     weekDates: List<LocalDate>,
@@ -141,70 +143,73 @@ fun WeeklySchedule(
     lessonTrailing: @Composable (DayLesson, LocalDate) -> Unit = { _, _ -> },
 ) {
     val today = remember { LocalDate.now() }
-    LazyRow(
-        contentPadding = PaddingValues(horizontal = 12.dp),
-        horizontalArrangement = Arrangement.spacedBy(8.dp),
+    val listState = rememberLazyListState()
+    LaunchedEffect(Unit) {
+        val index = weekDates.indexOf(today).coerceAtLeast(0)
+        if (index > 0) listState.scrollToItem(index)
+    }
+    LazyColumn(
+        state = listState,
+        contentPadding = PaddingValues(horizontal = 12.dp, vertical = 8.dp),
         modifier = modifier.fillMaxSize(),
     ) {
-        items(weekDates) { date ->
-            DayColumn(date, lessonsByDate[date].orEmpty(), isToday = date == today, lessonTrailing)
-        }
-    }
-}
-
-@Composable
-private fun DayColumn(
-    date: LocalDate,
-    slots: List<DayLesson>,
-    isToday: Boolean,
-    lessonTrailing: @Composable (DayLesson, LocalDate) -> Unit,
-) {
-    Card(
-        modifier = Modifier
-            .fillMaxHeight()
-            .width(150.dp),
-        colors = if (isToday) {
-            CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.primaryContainer)
-        } else {
-            CardDefaults.cardColors()
-        },
-    ) {
-        Column(Modifier.padding(10.dp)) {
-            Text(
-                TimeUtils.dayLabel(date.dayOfWeek.value) + if (isToday) " · 今天" else "",
-                style = MaterialTheme.typography.titleSmall,
-                fontWeight = FontWeight.Bold,
-                color = if (isToday) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurface,
-            )
-            if (slots.isEmpty()) {
+        weekDates.forEach { date ->
+            item(key = date.toString()) {
+                val lessons = lessonsByDate[date].orEmpty()
+                val isToday = date == today
                 Text(
-                    "无课",
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.outline,
-                    modifier = Modifier.padding(top = 8.dp),
+                    TimeUtils.dayLabel(date.dayOfWeek.value) +
+                        " ${date.monthValue}/${date.dayOfMonth}" +
+                        (if (isToday) " · 今天" else ""),
+                    style = MaterialTheme.typography.titleSmall,
+                    fontWeight = FontWeight.Bold,
+                    color = if (isToday) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurface,
+                    modifier = Modifier.padding(top = 10.dp, bottom = 4.dp),
                 )
-            }
-            slots.forEachIndexed { index, slot ->
-                if (index > 0) HorizontalDivider(Modifier.padding(top = 8.dp))
-                Column(Modifier.padding(top = 8.dp)) {
+                if (lessons.isEmpty()) {
                     Text(
-                        TimeUtils.minutesToText(slot.startMinute) + " - " + TimeUtils.minutesToText(slot.endMinute),
-                        style = MaterialTheme.typography.labelMedium,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        "无课",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.outline,
+                        modifier = Modifier.padding(bottom = 4.dp),
                     )
-                    Text(
-                        slot.className + if (slot.isCancelled) "（已停课）" else "",
-                        style = MaterialTheme.typography.bodyMedium,
-                        fontWeight = FontWeight.SemiBold,
-                        color = if (slot.isCancelled) MaterialTheme.colorScheme.outline else MaterialTheme.colorScheme.onSurface,
-                    )
-                    if (slot.subject.isNotBlank()) {
-                        Text(slot.subject, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                }
+                lessons.forEachIndexed { index, lesson ->
+                    if (index > 0) HorizontalDivider()
+                    Row(
+                        Modifier
+                            .fillMaxWidth()
+                            .padding(vertical = 8.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                    ) {
+                        Column(Modifier.weight(1f)) {
+                            Text(
+                                TimeUtils.minutesToText(lesson.startMinute) + " - " +
+                                    TimeUtils.minutesToText(lesson.endMinute) +
+                                    (if (lesson.isCancelled) " · 已停课" else "") +
+                                    (if (lesson.isExtra) " · 加课" else ""),
+                                style = MaterialTheme.typography.labelMedium,
+                                color = if (lesson.isCancelled) MaterialTheme.colorScheme.outline
+                                else MaterialTheme.colorScheme.onSurfaceVariant,
+                            )
+                            Text(
+                                lesson.className,
+                                style = MaterialTheme.typography.bodyMedium,
+                                fontWeight = FontWeight.SemiBold,
+                                color = if (lesson.isCancelled) MaterialTheme.colorScheme.outline
+                                else MaterialTheme.colorScheme.onSurface,
+                            )
+                            val extras = listOf(lesson.subject, lesson.room).filter { it.isNotBlank() }
+                            if (extras.isNotEmpty()) {
+                                Text(
+                                    extras.joinToString(" · "),
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                )
+                            }
+                        }
+                        lessonTrailing(lesson, date)
                     }
-                    if (slot.room.isNotBlank()) {
-                        Text(slot.room, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                    }
-                    lessonTrailing(slot, date)
                 }
             }
         }

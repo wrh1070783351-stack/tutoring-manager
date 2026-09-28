@@ -5,6 +5,7 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.rememberScrollState
@@ -137,6 +138,30 @@ class StudentDetailViewModel(
         }
     }
 
+    /** 登记补缴（欠款到账）。 */
+    fun registerPayment(
+        enrollment: EnrollmentWithDetails,
+        amountCents: Long,
+        method: Int,
+        dateIso: String,
+        onResult: (String?) -> Unit,
+    ) {
+        viewModelScope.launch {
+            if (amountCents <= 0) {
+                onResult("金额必须大于 0")
+            } else {
+                enrollmentRepository.addPayment(
+                    studentId = enrollment.enrollment.studentId,
+                    enrollmentId = enrollment.enrollment.id,
+                    amountCents = amountCents,
+                    dateIso = dateIso,
+                    method = method,
+                )
+                onResult(null)
+            }
+        }
+    }
+
     companion object {
         fun factory(studentId: Long) = object : ViewModelProvider.Factory {
             @Suppress("UNCHECKED_CAST")
@@ -165,6 +190,7 @@ fun StudentDetailScreen(
     val payments by vm.payments.collectAsStateWithLifecycle()
     val consumedByEnrollment by vm.consumedByEnrollment.collectAsStateWithLifecycle()
     var renewTarget by remember { mutableStateOf<EnrollmentWithDetails?>(null) }
+    var payTarget by remember { mutableStateOf<Pair<EnrollmentWithDetails, Long>?>(null) }
 
     Column(
         Modifier
@@ -245,7 +271,23 @@ fun StudentDetailScreen(
                             color = MaterialTheme.colorScheme.onSurfaceVariant,
                         )
                     }
-                    TextButton(onClick = { renewTarget = ew }) { Text("续费") }
+                    // 定课与缴费分离：约定金额已记在课时包/学期里，实收看缴费记录
+                    val billed = ew.packages.sumOf { it.amountCents } + ew.termRecords.sumOf { it.amountCents }
+                    val paid = payments.filter { it.enrollmentId == ew.enrollment.id }.sumOf { it.amountCents }
+                    val unpaid = billed - paid
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        TextButton(onClick = { renewTarget = ew }) { Text("续费") }
+                        if (unpaid > 0) {
+                            Text(
+                                "未收 ¥" + MoneyUtils.yuanText(unpaid),
+                                color = MaterialTheme.colorScheme.error,
+                                style = MaterialTheme.typography.labelMedium,
+                                modifier = Modifier.weight(1f),
+                                textAlign = androidx.compose.ui.text.style.TextAlign.End,
+                            )
+                            TextButton(onClick = { payTarget = ew to unpaid }) { Text("登记缴费") }
+                        }
+                    }
                 }
             }
         }
@@ -301,6 +343,15 @@ fun StudentDetailScreen(
             vm.renew(target, draft, onResult)
         }
     }
+
+    payTarget?.let { (target, unpaidCents) ->
+        RegisterPaymentDialog(
+            unpaidCents = unpaidCents,
+            onDismiss = { payTarget = null },
+        ) { cents, method, date, onResult ->
+            vm.registerPayment(target, cents, method, date, onResult)
+        }
+    }
 }
 
 @Composable
@@ -327,6 +378,7 @@ private fun RenewDialog(
     var startDate by remember { mutableStateOf(today) }
     var endDate by remember { mutableStateOf(LocalDate.now().plusMonths(4).toString()) }
     var method by remember { mutableStateOf(1) }
+    var paidNow by remember { mutableStateOf(true) }
     var error by remember { mutableStateOf<String?>(null) }
 
     AlertDialog(
@@ -345,14 +397,31 @@ private fun RenewDialog(
                     OutlinedTextField(amountText, { amountText = it }, label = { Text("金额（元）") }, singleLine = true, modifier = Modifier.fillMaxWidth().padding(top = 6.dp))
                 }
                 Row(Modifier.padding(top = 8.dp), verticalAlignment = Alignment.CenterVertically) {
-                    Text("方式：", style = MaterialTheme.typography.bodyMedium)
-                    Payment.METHOD_LABELS.take(3).forEachIndexed { i, label ->
-                        FilterChip(
-                            selected = method == i,
-                            onClick = { method = i },
-                            label = { Text(label) },
-                            modifier = Modifier.padding(start = if (i == 0) 4.dp else 6.dp),
-                        )
+                    Text("缴费状态：", style = MaterialTheme.typography.bodyMedium)
+                    FilterChip(
+                        selected = paidNow,
+                        onClick = { paidNow = true },
+                        label = { Text("已收") },
+                        modifier = Modifier.padding(start = 4.dp),
+                    )
+                    FilterChip(
+                        selected = !paidNow,
+                        onClick = { paidNow = false },
+                        label = { Text("未收 · 期末结") },
+                        modifier = Modifier.padding(start = 6.dp),
+                    )
+                }
+                if (paidNow) {
+                    Row(Modifier.padding(top = 8.dp), verticalAlignment = Alignment.CenterVertically) {
+                        Text("方式：", style = MaterialTheme.typography.bodyMedium)
+                        Payment.METHOD_LABELS.take(3).forEachIndexed { i, label ->
+                            FilterChip(
+                                selected = method == i,
+                                onClick = { method = i },
+                                label = { Text(label) },
+                                modifier = Modifier.padding(start = if (i == 0) 4.dp else 6.dp),
+                            )
+                        }
                     }
                 }
                 if (error != null) {
@@ -378,6 +447,7 @@ private fun RenewDialog(
                     payDate = today,
                     method = method,
                     validUntil = validUntilText.trim().ifBlank { null },
+                    paymentReceived = paidNow,
                 )
                 onConfirm(draft) { err ->
                     if (err == null) onDismiss() else error = err
@@ -415,13 +485,13 @@ private fun StudentScheduleSection(vm: StudentDetailViewModel) {
         modifier = Modifier
             .fillMaxWidth()
             .padding(horizontal = 12.dp)
-            .heightIn(min = if (mode == 0) 230.dp else 430.dp),
+            .height(if (mode == 0) 260.dp else 500.dp),
     ) {
         if (mode == 0) {
             com.wrh.keshiguanjia.ui.schedule.WeeklySchedule(
                 weekDates = vm.weekDates,
                 lessonsByDate = weekLessons,
-                modifier = Modifier.fillMaxWidth().heightIn(min = 230.dp),
+                modifier = Modifier.fillMaxWidth(),
                 lessonTrailing = { lesson, date ->
                     val status = attendanceByKey["${date}|${lesson.classId}"]
                     if (status != null) {
@@ -485,4 +555,56 @@ private fun StudentScheduleSection(vm: StudentDetailViewModel) {
             confirmButton = { TextButton(onClick = { selectedDay = null }) { Text("关闭") } },
         )
     }
+}
+
+/** 登记缴费（欠款到账）。 */
+@Composable
+private fun RegisterPaymentDialog(
+    unpaidCents: Long,
+    onDismiss: () -> Unit,
+    onConfirm: (amountCents: Long, method: Int, dateIso: String, onResult: (String?) -> Unit) -> Unit,
+) {
+    val today = remember { LocalDate.now().toString() }
+    var amountText by remember { mutableStateOf(MoneyUtils.yuanText(unpaidCents)) }
+    var dateText by remember { mutableStateOf(today) }
+    var method by remember { mutableStateOf(1) }
+    var error by remember { mutableStateOf<String?>(null) }
+
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text("登记缴费") },
+        text = {
+            Column {
+                OutlinedTextField(amountText, { amountText = it; error = null }, label = { Text("金额（元）") }, singleLine = true, modifier = Modifier.fillMaxWidth())
+                OutlinedTextField(dateText, { dateText = it }, label = { Text("缴费日期（yyyy-MM-dd）") }, singleLine = true, modifier = Modifier.fillMaxWidth().padding(top = 6.dp))
+                Row(Modifier.padding(top = 8.dp), verticalAlignment = Alignment.CenterVertically) {
+                    Text("方式：", style = MaterialTheme.typography.bodyMedium)
+                    Payment.METHOD_LABELS.take(3).forEachIndexed { i, label ->
+                        FilterChip(
+                            selected = method == i,
+                            onClick = { method = i },
+                            label = { Text(label) },
+                            modifier = Modifier.padding(start = if (i == 0) 4.dp else 6.dp),
+                        )
+                    }
+                }
+                if (error != null) {
+                    Text(error!!, color = MaterialTheme.colorScheme.error, style = MaterialTheme.typography.bodySmall, modifier = Modifier.padding(top = 6.dp))
+                }
+            }
+        },
+        confirmButton = {
+            Button(onClick = {
+                val cents = MoneyUtils.parseYuanToCents(amountText)
+                if (cents == null || cents <= 0) {
+                    error = "金额格式错误"
+                    return@Button
+                }
+                onConfirm(cents, method, dateText.trim()) { err ->
+                    if (err == null) onDismiss() else error = err
+                }
+            }) { Text("保存") }
+        },
+        dismissButton = { TextButton(onClick = onDismiss) { Text("取消") } },
+    )
 }
