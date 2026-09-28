@@ -20,8 +20,8 @@ class AppInfoTest {
     }
 
     @Test
-    fun currentVersion_is_0_2_0() {
-        assertEquals("0.2.0", AppInfo.VERSION_NAME)
+    fun currentVersion_is_0_3_0() {
+        assertEquals("0.3.0", AppInfo.VERSION_NAME)
     }
 }
 

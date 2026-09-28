@@ -7,6 +7,7 @@ import com.wrh.keshiguanjia.data.ClassTime
 import com.wrh.keshiguanjia.data.Graph
 import com.wrh.keshiguanjia.data.KeshiDatabase
 import com.wrh.keshiguanjia.data.Student
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.runBlocking
 import org.junit.Assert.assertTrue
 import org.junit.Test
@@ -55,6 +56,42 @@ class SeedDataTest {
                 ),
             )
         }
+
+        // 报名样例：Tom 报 Math A 次卡（20+2 次，¥2000，微信）
+        if (db.enrollmentDao().countFor(studentNameId("Tom", db), mathClassId(db)) == 0) {
+            val sid = studentNameId("Tom", db)
+            val cid = mathClassId(db)
+            if (sid > 0 && cid > 0) {
+                Graph.enrollmentRepository.enroll(
+                    sid,
+                    com.wrh.keshiguanjia.logic.BillingDraft(
+                        classId = cid,
+                        billingType = com.wrh.keshiguanjia.data.Enrollment.BILLING_SESSIONS,
+                        sessions = 20, bonusSessions = 2,
+                        amountCents = 200000, payDate = "2026-09-01", method = 1, note = "sample",
+                    ),
+                )
+            }
+        }
+
+        // 调休演示：下周一 Math A 停课（若当天尚无调整记录）
+        if (db.lessonOverrideDao().forClassDate(mathClassId(db), nextMonday().toString()).isEmpty() && mathClassId(db) > 0) {
+            Graph.scheduleRepository.cancelOccurrence(mathClassId(db), nextMonday().toString(), note = "sample 调休")
+        }
         db.close()
     }
+
+    private fun nextMonday(): java.time.LocalDate {
+        var d = java.time.LocalDate.now().plusDays(1)
+        while (d.dayOfWeek.value != 1) d = d.plusDays(1)
+        return d
+    }
+
+    private suspend fun studentNameId(name: String, db: KeshiDatabase): Long =
+        com.wrh.keshiguanjia.data.StudentRepository(db.studentDao())
+            .observeAll().first().firstOrNull { it.name == name }?.id ?: 0
+
+    private suspend fun mathClassId(db: KeshiDatabase): Long =
+        db.classDao().observeAllWithTimes().first()
+            .firstOrNull { it.clazz.name == "Math A" }?.clazz?.id ?: 0
 }

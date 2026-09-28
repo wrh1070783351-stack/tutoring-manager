@@ -64,14 +64,14 @@ class StudentsViewModel(private val repo: StudentRepository) : ViewModel() {
 }
 
 @Composable
-fun StudentListScreen(onEdit: (Long) -> Unit) {
+fun StudentListScreen(onAdd: () -> Unit, onOpen: (Long) -> Unit) {
     val vm: StudentsViewModel = viewModel(factory = StudentsViewModel.Factory)
     val students by vm.students.collectAsStateWithLifecycle()
     val query by vm.query.collectAsStateWithLifecycle()
 
     Scaffold(
         floatingActionButton = {
-            FloatingActionButton(onClick = { onEdit(-1L) }) {
+            FloatingActionButton(onClick = onAdd) {
                 Icon(Icons.Filled.Add, contentDescription = "添加学生")
             }
         },
@@ -105,7 +105,7 @@ fun StudentListScreen(onEdit: (Long) -> Unit) {
                                 ).joinToString(" · ")
                                 Text(second.ifBlank { "暂无补充信息" })
                             },
-                            modifier = Modifier.clickable { onEdit(s.id) },
+                            modifier = Modifier.clickable { onOpen(s.id) },
                         )
                         HorizontalDivider()
                     }

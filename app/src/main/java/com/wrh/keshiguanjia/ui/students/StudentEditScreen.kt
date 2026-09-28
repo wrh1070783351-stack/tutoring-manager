@@ -8,8 +8,13 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
+import androidx.activity.compose.BackHandler
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
+import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
@@ -58,6 +63,14 @@ class StudentEditViewModel(
     private val _state = MutableStateFlow(UiState())
     val state: StateFlow<UiState> = _state.asStateFlow()
 
+    /** 载入完成时的快照，用于判断是否有未保存修改。 */
+    private var pristine: UiState? = null
+
+    fun isDirty(): Boolean {
+        val p = pristine ?: return false
+        return _state.value.copy(error = null) != p
+    }
+
     init {
         viewModelScope.launch {
             if (studentId > 0) {
@@ -75,6 +88,7 @@ class StudentEditViewModel(
             } else {
                 _state.update { it.copy(loaded = true) }
             }
+            pristine = _state.value.copy(error = null)
         }
     }
 
@@ -126,6 +140,12 @@ fun StudentEditScreen(studentId: Long, onDone: () -> Unit) {
     val state by vm.state.collectAsStateWithLifecycle()
     val scope = rememberCoroutineScope()
     var showDeleteConfirm by remember { mutableStateOf(false) }
+    var showDiscardConfirm by remember { mutableStateOf(false) }
+
+    val handleBack: () -> Unit = {
+        if (vm.isDirty()) showDiscardConfirm = true else onDone()
+    }
+    BackHandler { handleBack() }
 
     if (!state.loaded) return
 
@@ -136,6 +156,9 @@ fun StudentEditScreen(studentId: Long, onDone: () -> Unit) {
             .padding(16.dp),
     ) {
         Row(verticalAlignment = Alignment.CenterVertically) {
+            IconButton(onClick = handleBack) {
+                Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "返回")
+            }
             Text(
                 if (state.isNew) "新增学生" else "编辑学生",
                 style = MaterialTheme.typography.titleLarge,
@@ -213,6 +236,23 @@ fun StudentEditScreen(studentId: Long, onDone: () -> Unit) {
             },
             dismissButton = {
                 TextButton(onClick = { showDeleteConfirm = false }) { Text("取消") }
+            },
+        )
+    }
+
+    if (showDiscardConfirm) {
+        AlertDialog(
+            onDismissRequest = { showDiscardConfirm = false },
+            title = { Text("放弃修改？") },
+            text = { Text("当前页面有未保存的内容，离开将丢失这些修改。") },
+            confirmButton = {
+                TextButton(onClick = {
+                    showDiscardConfirm = false
+                    onDone()
+                }) { Text("放弃", color = MaterialTheme.colorScheme.error) }
+            },
+            dismissButton = {
+                TextButton(onClick = { showDiscardConfirm = false }) { Text("继续编辑") }
             },
         )
     }

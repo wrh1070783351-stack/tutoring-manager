@@ -1,5 +1,6 @@
 package com.wrh.keshiguanjia.ui.classes
 
+import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -10,6 +11,7 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
@@ -48,6 +50,7 @@ import com.wrh.keshiguanjia.data.Graph
 import com.wrh.keshiguanjia.logic.ClassTimeDraft
 import com.wrh.keshiguanjia.logic.TimeUtils
 import com.wrh.keshiguanjia.logic.Validators
+import com.wrh.keshiguanjia.ui.TimePickerDialogM3
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -73,6 +76,14 @@ class ClassEditViewModel(
     private val _state = MutableStateFlow(UiState())
     val state: StateFlow<UiState> = _state.asStateFlow()
 
+    /** 载入完成时的快照，用于判断是否有未保存修改。 */
+    private var pristine: UiState? = null
+
+    fun isDirty(): Boolean {
+        val p = pristine ?: return false
+        return _state.value.copy(error = null) != p
+    }
+
     init {
         viewModelScope.launch {
             if (classId > 0) {
@@ -97,6 +108,7 @@ class ClassEditViewModel(
             } else {
                 _state.update { it.copy(loaded = true) }
             }
+            pristine = _state.value.copy(error = null)
         }
     }
 
@@ -165,8 +177,14 @@ fun ClassEditScreen(classId: Long, onDone: () -> Unit) {
     val state by vm.state.collectAsStateWithLifecycle()
     val scope = rememberCoroutineScope()
     var showDeleteConfirm by remember { mutableStateOf(false) }
+    var showDiscardConfirm by remember { mutableStateOf(false) }
     // 正在编辑的时间：index 到 起始/结束（true=起始，false=结束）
     var editingTime by remember { mutableStateOf<Pair<Int, Boolean>?>(null) }
+
+    val handleBack: () -> Unit = {
+        if (vm.isDirty()) showDiscardConfirm = true else onDone()
+    }
+    BackHandler { handleBack() }
 
     if (!state.loaded) return
 
@@ -177,6 +195,9 @@ fun ClassEditScreen(classId: Long, onDone: () -> Unit) {
             .padding(16.dp),
     ) {
         Row(verticalAlignment = Alignment.CenterVertically) {
+            IconButton(onClick = handleBack) {
+                Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "返回")
+            }
             Text(
                 if (state.isNew) "新增班级" else "编辑班级",
                 style = MaterialTheme.typography.titleLarge,
@@ -281,25 +302,14 @@ fun ClassEditScreen(classId: Long, onDone: () -> Unit) {
     editingTime?.let { (index, isStart) ->
         val draft = state.times.getOrNull(index) ?: return
         val initial = if (isStart) draft.startMinute else draft.endMinute
-        val pickerState = rememberTimePickerState(
-            initialHour = initial / 60,
-            initialMinute = initial % 60,
-            is24Hour = true,
-        )
-        AlertDialog(
-            onDismissRequest = { editingTime = null },
-            title = { Text(if (isStart) "上课时间" else "下课时间") },
-            text = { TimePicker(state = pickerState) },
-            confirmButton = {
-                TextButton(onClick = {
-                    val m = pickerState.hour * 60 + pickerState.minute
-                    vm.updateTime(index, if (isStart) draft.copy(startMinute = m) else draft.copy(endMinute = m))
-                    editingTime = null
-                }) { Text("确定") }
+        TimePickerDialogM3(
+            title = if (isStart) "上课时间" else "下课时间",
+            initialMinute = initial,
+            onConfirm = { m ->
+                vm.updateTime(index, if (isStart) draft.copy(startMinute = m) else draft.copy(endMinute = m))
+                editingTime = null
             },
-            dismissButton = {
-                TextButton(onClick = { editingTime = null }) { Text("取消") }
-            },
+            onDismiss = { editingTime = null },
         )
     }
 
@@ -319,6 +329,23 @@ fun ClassEditScreen(classId: Long, onDone: () -> Unit) {
             },
             dismissButton = {
                 TextButton(onClick = { showDeleteConfirm = false }) { Text("取消") }
+            },
+        )
+    }
+
+    if (showDiscardConfirm) {
+        AlertDialog(
+            onDismissRequest = { showDiscardConfirm = false },
+            title = { Text("放弃修改？") },
+            text = { Text("当前页面有未保存的内容，离开将丢失这些修改。") },
+            confirmButton = {
+                TextButton(onClick = {
+                    showDiscardConfirm = false
+                    onDone()
+                }) { Text("放弃", color = MaterialTheme.colorScheme.error) }
+            },
+            dismissButton = {
+                TextButton(onClick = { showDiscardConfirm = false }) { Text("继续编辑") }
             },
         )
     }

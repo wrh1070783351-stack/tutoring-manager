@@ -25,6 +25,8 @@ import androidx.navigation.compose.rememberNavController
 import com.wrh.keshiguanjia.ui.classes.ClassEditScreen
 import com.wrh.keshiguanjia.ui.classes.ClassListScreen
 import com.wrh.keshiguanjia.ui.home.HomeScreen
+import com.wrh.keshiguanjia.ui.students.EnrollScreen
+import com.wrh.keshiguanjia.ui.students.StudentDetailScreen
 import com.wrh.keshiguanjia.ui.students.StudentEditScreen
 import com.wrh.keshiguanjia.ui.students.StudentListScreen
 
@@ -34,9 +36,13 @@ object Routes {
     const val CLASSES = "classes"
     const val STUDENT_EDIT = "student/{studentId}"
     const val CLASS_EDIT = "class/{classId}"
+    const val STUDENT_DETAIL = "student_detail/{studentId}"
+    const val ENROLL = "enroll/{studentId}"
 
     fun studentEdit(id: Long) = "student/$id"
     fun classEdit(id: Long) = "class/$id"
+    fun studentDetail(id: Long) = "student_detail/$id"
+    fun enroll(id: Long) = "enroll/$id"
 }
 
 private data class TopLevelDestination(val route: String, val label: String, val icon: ImageVector)
@@ -84,7 +90,10 @@ fun KeshiApp() {
         ) {
             composable(Routes.HOME) { HomeScreen() }
             composable(Routes.STUDENTS) {
-                StudentListScreen(onEdit = { id -> navController.navigate(Routes.studentEdit(id)) })
+                StudentListScreen(
+                    onAdd = { navController.navigate(Routes.studentEdit(-1L)) },
+                    onOpen = { id -> navController.navigate(Routes.studentDetail(id)) },
+                )
             }
             composable(Routes.CLASSES) {
                 ClassListScreen(onEdit = { id -> navController.navigate(Routes.classEdit(id)) })
@@ -96,6 +105,19 @@ fun KeshiApp() {
             composable(Routes.CLASS_EDIT) { entry ->
                 val id = entry.arguments?.getString("classId")?.toLongOrNull() ?: -1L
                 ClassEditScreen(classId = id, onDone = { navController.popBackStack() })
+            }
+            composable(Routes.STUDENT_DETAIL) { entry ->
+                val id = entry.arguments?.getString("studentId")?.toLongOrNull() ?: -1L
+                StudentDetailScreen(
+                    studentId = id,
+                    onBack = { navController.popBackStack() },
+                    onEdit = { navController.navigate(Routes.studentEdit(id)) },
+                    onEnroll = { navController.navigate(Routes.enroll(id)) },
+                )
+            }
+            composable(Routes.ENROLL) { entry ->
+                val id = entry.arguments?.getString("studentId")?.toLongOrNull() ?: -1L
+                EnrollScreen(studentId = id, onDone = { navController.popBackStack() })
             }
         }
     }
