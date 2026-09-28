@@ -74,6 +74,23 @@ class SeedDataTest {
             }
         }
 
+        // 欠费样例：Amy 报 English B 次卡（5 次，¥500，未收 · 期末结）
+        val amyId = studentNameId("Amy", db)
+        val englishId = db.classDao().observeAllWithTimes().first()
+            .firstOrNull { it.clazz.name == "English B" }?.clazz?.id ?: 0
+        if (amyId > 0 && englishId > 0 && db.enrollmentDao().countFor(amyId, englishId) == 0) {
+            Graph.enrollmentRepository.enroll(
+                amyId,
+                com.wrh.keshiguanjia.logic.BillingDraft(
+                    classId = englishId,
+                    billingType = com.wrh.keshiguanjia.data.Enrollment.BILLING_SESSIONS,
+                    sessions = 5,
+                    amountCents = 50000, payDate = "2026-09-01",
+                    paymentReceived = false, note = "sample 欠费",
+                ),
+            )
+        }
+
         // 调休演示：下周一 Math A 停课（若当天尚无调整记录）
         if (db.lessonOverrideDao().forClassDate(mathClassId(db), nextMonday().toString()).isEmpty() && mathClassId(db) > 0) {
             Graph.scheduleRepository.cancelOccurrence(mathClassId(db), nextMonday().toString(), note = "sample 调休")

@@ -135,22 +135,31 @@ abstract class KeshiDatabase : RoomDatabase() {
  * 轻量服务定位器：应用级单例。规模小暂不引入 Hilt，保持构建简单。
  */
 object Graph {
-    private lateinit var db: KeshiDatabase
+    private var db: KeshiDatabase? = null
+    private var appContext: Context? = null
 
     fun init(context: Context) {
-        if (!Graph::db.isInitialized) {
+        if (db == null) {
+            appContext = context.applicationContext
             db = KeshiDatabase.build(context.applicationContext)
         }
     }
 
-    internal fun database(): KeshiDatabase = db
+    internal fun appContextForVm(): Context =
+        appContext ?: error("Graph 未初始化")
 
-    val studentRepository: StudentRepository by lazy { StudentRepository(db.studentDao()) }
-    val classRepository: ClassRepository by lazy { ClassRepository(db.classDao(), db.classTimeDao(), db) }
+    internal fun database(): KeshiDatabase =
+        db ?: error("Graph 未初始化，请先在 Application 中调用 init()")
+
+    val studentRepository: StudentRepository by lazy { StudentRepository(database().studentDao()) }
+    val classRepository: ClassRepository by lazy { ClassRepository(database().classDao(), database().classTimeDao(), database()) }
     val enrollmentRepository: EnrollmentRepository by lazy {
         EnrollmentRepository(
-            db.enrollmentDao(), db.classPackageDao(), db.termRecordDao(), db.paymentDao(), db, db.attendanceDao(),
+            database().enrollmentDao(), database().classPackageDao(), database().termRecordDao(),
+            database().paymentDao(), database(), database().attendanceDao(),
         )
     }
-    val scheduleRepository: ScheduleRepository by lazy { ScheduleRepository(db.classDao(), db.classTimeDao(), db.lessonOverrideDao(), db) }
+    val scheduleRepository: ScheduleRepository by lazy {
+        ScheduleRepository(database().classDao(), database().classTimeDao(), database().lessonOverrideDao(), database())
+    }
 }

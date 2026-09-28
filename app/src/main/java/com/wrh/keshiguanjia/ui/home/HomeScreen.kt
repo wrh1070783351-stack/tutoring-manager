@@ -5,6 +5,9 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
+import androidx.compose.material3.Card
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.FilterChip
 import androidx.compose.material3.MaterialTheme
@@ -48,9 +51,10 @@ import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 
-class HomeViewModel : ViewModel() {
+class HomeViewModel(private val appContext: android.content.Context) : ViewModel() {
 
     private val scheduleRepo = Graph.scheduleRepository
+    private val enrollmentRepo = Graph.enrollmentRepository
 
     private val weekMonday: LocalDate = LocalDate.now()
 
@@ -102,9 +106,27 @@ class HomeViewModel : ViewModel() {
         scheduleRepo.deleteOverride(id)
     }
 
+    // ---- 提醒中心（M4）----
+
+    val reminders: StateFlow<List<com.wrh.keshiguanjia.logic.ReminderItem>> = combine(
+        enrollmentRepo.observeAllEnrollments(),
+        enrollmentRepo.observeConsumedAll(),
+        enrollmentRepo.observeAllPayments(),
+    ) { enrollments, consumed, payments ->
+        com.wrh.keshiguanjia.logic.Reminders.build(
+            enrollments = enrollments,
+            consumedByEnrollment = consumed,
+            payments = payments,
+            today = LocalDate.now(),
+            lowBalanceThreshold = com.wrh.keshiguanjia.logic.Settings.lowBalanceThreshold(appContext),
+            expiryWarnDays = com.wrh.keshiguanjia.logic.Settings.expiryWarnDays(appContext),
+        )
+    }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyList())
+
     companion object Factory : ViewModelProvider.Factory {
         @Suppress("UNCHECKED_CAST")
-        override fun <T : ViewModel> create(modelClass: Class<T>): T = HomeViewModel() as T
+        override fun <T : ViewModel> create(modelClass: Class<T>): T =
+            HomeViewModel(Graph.appContextForVm()) as T
     }
 }
 
@@ -116,8 +138,10 @@ fun HomeScreen(onOpenRollCall: (classId: Long, date: LocalDate) -> Unit) {
     val week by vm.week.collectAsStateWithLifecycle()
     val month by vm.month.collectAsStateWithLifecycle()
     val monthLessons by vm.monthLessons.collectAsStateWithLifecycle()
+    val reminders by vm.reminders.collectAsStateWithLifecycle()
     var viewMode by rememberSaveable { mutableIntStateOf(0) }
     var selectedDate by remember { mutableStateOf<LocalDate?>(null) }
+    var showReminders by remember { mutableStateOf(false) }
     val capture = rememberCaptureState()
 
     Column(Modifier.fillMaxSize()) {
@@ -135,6 +159,36 @@ fun HomeScreen(onOpenRollCall: (classId: Long, date: LocalDate) -> Unit) {
             ShareButton(capture, if (viewMode == 0) "schedule-week.png" else "schedule-month.png")
             FilterChip(selected = viewMode == 0, onClick = { viewMode = 0 }, label = { Text("周") })
             FilterChip(selected = viewMode == 1, onClick = { viewMode = 1 }, label = { Text("月") }, modifier = Modifier.padding(start = 4.dp))
+        }
+
+        if (reminders.isNotEmpty()) {
+            val low = reminders.count { it.kind == com.wrh.keshiguanjia.logic.ReminderItem.KIND_LOW_BALANCE }
+            val expiring = reminders.count { it.kind == com.wrh.keshiguanjia.logic.ReminderItem.KIND_EXPIRING }
+            val unpaid = reminders.count { it.kind == com.wrh.keshiguanjia.logic.ReminderItem.KIND_UNPAID }
+            Card(
+                onClick = { showReminders = true },
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 12.dp, vertical = 4.dp),
+                colors = androidx.compose.material3.CardDefaults.cardColors(
+                    containerColor = MaterialTheme.colorScheme.errorContainer.copy(alpha = 0.6f),
+                ),
+            ) {
+                Text(
+                    buildString {
+                        append("提醒 ${reminders.size} 条：")
+                        val parts = mutableListOf<String>()
+                        if (low > 0) parts += "课时不足 $low"
+                        if (expiring > 0) parts += "即将到期 $expiring"
+                        if (unpaid > 0) parts += "欠费 $unpaid"
+                        append(parts.joinToString(" · "))
+                        append("（点击查看）")
+                    },
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onErrorContainer,
+                    modifier = Modifier.padding(horizontal = 12.dp, vertical = 8.dp),
+                )
+            }
         }
 
         ShareableBox(
@@ -165,6 +219,37 @@ fun HomeScreen(onOpenRollCall: (classId: Long, date: LocalDate) -> Unit) {
                 )
             }
         }
+    }
+
+    if (showReminders) {
+        androidx.compose.material3.AlertDialog(
+            onDismissRequest = { showReminders = false },
+            title = { Text("提醒中心（${reminders.size}）") },
+            text = {
+                Column(Modifier.verticalScroll(androidx.compose.foundation.rememberScrollState())) {
+                    com.wrh.keshiguanjia.logic.ReminderItem.KIND_LABELS.forEachIndexed { kind, kindLabel ->
+                        val items = reminders.filter { it.kind == kind }
+                        if (items.isNotEmpty()) {
+                            Text(
+                                kindLabel,
+                                style = MaterialTheme.typography.titleSmall,
+                                color = if (kind == com.wrh.keshiguanjia.logic.ReminderItem.KIND_UNPAID || kind == com.wrh.keshiguanjia.logic.ReminderItem.KIND_LOW_BALANCE)
+                                    MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.primary,
+                                modifier = Modifier.padding(top = 8.dp, bottom = 4.dp),
+                            )
+                            items.forEach { r ->
+                                Text(
+                                    "${r.studentName} · ${r.className} —— ${r.detail}",
+                                    style = MaterialTheme.typography.bodyMedium,
+                                    modifier = Modifier.padding(vertical = 2.dp),
+                                )
+                            }
+                        }
+                    }
+                }
+            },
+            confirmButton = { TextButton(onClick = { showReminders = false }) { Text("知道了") } },
+        )
     }
 
     selectedDate?.let { date ->

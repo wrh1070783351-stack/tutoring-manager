@@ -34,6 +34,10 @@ interface EnrollmentDao {
     @Query("SELECT * FROM enrollments WHERE classId = :classId ORDER BY createdAt DESC")
     fun observeForClass(classId: Long): Flow<List<EnrollmentWithDetails>>
 
+    @Transaction
+    @Query("SELECT * FROM enrollments ORDER BY createdAt DESC")
+    fun observeAll(): Flow<List<EnrollmentWithDetails>>
+
     @Query("SELECT * FROM enrollments WHERE id = :id")
     suspend fun getById(id: Long): Enrollment?
 
@@ -78,6 +82,9 @@ interface PaymentDao {
 
     @Query("SELECT * FROM payments WHERE studentId = :studentId ORDER BY date DESC, createdAt DESC")
     fun observeForStudent(studentId: Long): Flow<List<Payment>>
+
+    @Query("SELECT * FROM payments ORDER BY date DESC, createdAt DESC")
+    fun observeAll(): Flow<List<Payment>>
 
     @Query("SELECT COALESCE(SUM(amountCents), 0) FROM payments WHERE date LIKE :yearMonthPrefix || '%'")
     suspend fun sumForMonth(yearMonthPrefix: String): Long
@@ -137,6 +144,12 @@ interface AttendanceDao {
             "WHERE studentId = :studentId AND status IN (0, 2) GROUP BY enrollmentId"
     )
     fun observeConsumedForStudent(studentId: Long): Flow<Map<Long, Int>>
+
+    /** 日期区间内的消课数（到课+缺勤），ISO 日期按字典序比较。 */
+    @Query(
+        "SELECT COUNT(*) FROM attendance WHERE status IN (0, 2) AND date BETWEEN :startIso AND :endIso"
+    )
+    fun observeConsumedBetween(startIso: String, endIso: String): Flow<Int>
 
     @Query("DELETE FROM attendance WHERE id = :id")
     suspend fun deleteById(id: Long)

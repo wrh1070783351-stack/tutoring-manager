@@ -100,6 +100,17 @@ class EnrollmentRepository(
     fun observeForClass(classId: Long): Flow<List<EnrollmentWithDetails>> =
         enrollmentDao.observeForClass(classId)
 
+    fun observeAllEnrollments(): Flow<List<EnrollmentWithDetails>> =
+        enrollmentDao.observeAll()
+
+    fun observeAllPayments(): Flow<List<Payment>> = paymentDao.observeAll()
+
+    /** 本周（ISO 周一~周日）消课数。 */
+    fun observeConsumedThisWeek(today: java.time.LocalDate): Flow<Int> {
+        val (start, end) = com.wrh.keshiguanjia.logic.StatsLogic.thisWeekRange(today)
+        return attendanceDao.observeConsumedBetween(start.toString(), end.toString())
+    }
+
     fun observeAttendanceForClassDate(classId: Long, dateIso: String): Flow<List<Attendance>> =
         attendanceDao.observeForClassDate(classId, dateIso)
 

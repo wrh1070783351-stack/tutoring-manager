@@ -4,6 +4,7 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.DateRange
 import androidx.compose.material.icons.filled.Home
 import androidx.compose.material.icons.filled.List
 import androidx.compose.material.icons.filled.Person
@@ -35,6 +36,7 @@ object Routes {
     const val HOME = "home"
     const val STUDENTS = "students"
     const val CLASSES = "classes"
+    const val STATS = "stats"
     const val STUDENT_EDIT = "student/{studentId}"
     const val CLASS_EDIT = "class/{classId}"
     const val STUDENT_DETAIL = "student_detail/{studentId}"
@@ -60,6 +62,7 @@ fun KeshiApp() {
         TopLevelDestination(Routes.HOME, "今日课表", Icons.Filled.Home),
         TopLevelDestination(Routes.STUDENTS, "学生", Icons.Filled.Person),
         TopLevelDestination(Routes.CLASSES, "班级", Icons.Filled.List),
+        TopLevelDestination(Routes.STATS, "统计", Icons.Filled.DateRange),
     )
 
     Scaffold(
@@ -106,6 +109,9 @@ fun KeshiApp() {
             }
             composable(Routes.CLASSES) {
                 ClassListScreen(onEdit = { id -> navController.navigate(Routes.classEdit(id)) })
+            }
+            composable(Routes.STATS) {
+                com.wrh.keshiguanjia.ui.stats.StatsScreen()
             }
             composable(Routes.STUDENT_EDIT) { entry ->
                 val id = entry.arguments?.getString("studentId")?.toLongOrNull() ?: -1L
