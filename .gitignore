@@ -30,3 +30,8 @@ backup/
 # ---- 系统杂项 ----
 Thumbs.db
 *.log
+
+# ---- 发布签名（双保险：密钥在仓库外，这里再挡一层）----
+*.jks
+*.keystore
+release-keys/

@@ -43,12 +43,18 @@ class BackupExportTest {
 
     @Test
     fun backupProducesValidSqliteFile() {
-        runBlocking { db.studentDao().insert(Student(name = "Tom")) }
+        // backup 针对磁盘正式库文件；先建一个同名磁盘库触发落盘，测完清理
+        context.deleteDatabase(KeshiDatabase.NAME)
+        val disk = Room.databaseBuilder(context, KeshiDatabase::class.java, KeshiDatabase.NAME).build()
+        runBlocking { disk.studentDao().insert(Student(name = "BackupProbe")) }
+        disk.close()
+
         val file = BackupManager.backup(context, db)
         assertNotNull(file)
         assertTrue(file!!.exists())
         assertTrue(BackupManager.looksLikeSqlite(file))
         file.delete()
+        context.deleteDatabase(KeshiDatabase.NAME)
     }
 
     @Test
