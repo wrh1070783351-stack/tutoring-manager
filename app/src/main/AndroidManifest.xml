@@ -3,6 +3,7 @@
 
     <!-- 需求约定：第一版完全离线，不申请任何网络权限，学生数据不出手机 -->
     <application
+        android:name=".KeshiApplication"
         android:allowBackup="true"
         android:icon="@mipmap/ic_launcher"
         android:label="@string/app_name"
