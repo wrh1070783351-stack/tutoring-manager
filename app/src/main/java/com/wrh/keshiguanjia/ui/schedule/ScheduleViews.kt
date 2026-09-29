@@ -3,6 +3,7 @@ package com.wrh.keshiguanjia.ui.schedule
 import android.content.Context
 import android.content.Intent
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
@@ -141,32 +142,14 @@ private fun shareImage(context: Context, bitmap: ImageBitmap, fileName: String) 
     context.startActivity(Intent.createChooser(intent, "分享课表截图"))
 }
 
-/** 班级专属色：按 classId 稳定取色，让不同班级在所有课表里颜色一致、易于区分。 */
-private val CLASS_PALETTE = listOf(
-    0xFF0E7490, // 青
-    0xFF2563EB, // 蓝
-    0xFF7C3AED, // 紫
-    0xFFDB2777, // 玫红
-    0xFFEA580C, // 橙
-    0xFF16A34A, // 绿
-    0xFFB45309, // 棕
-    0xFF0F766E, // 深青
-)
-
-fun classColor(classId: Long) = androidx.compose.ui.graphics.Color(
-    CLASS_PALETTE[(classId % CLASS_PALETTE.size).toInt()]
-)
-
 /**
  * 周视图（竖向日程式：按天分组，浅色圆角块隔断）。
- * full=true 时整周完整渲染（长截图用）；否则在视口内滚动并自动定位到今天。
  */
 @Composable
 fun WeeklySchedule(
     weekDates: List<LocalDate>,
     lessonsByDate: Map<LocalDate, List<DayLesson>>,
     modifier: Modifier = Modifier,
-    full: Boolean = false,
     lessonTrailing: @Composable (DayLesson, LocalDate) -> Unit = { _, _ -> },
 ) {
     val today = remember { LocalDate.now() }
@@ -174,7 +157,7 @@ fun WeeklySchedule(
     var todayOffsetY by remember { mutableStateOf(0f) }
 
     LaunchedEffect(Unit) {
-        if (!full && todayOffsetY > 0) scrollState.scrollTo(todayOffsetY.toInt())
+        if (todayOffsetY > 0) scrollState.scrollTo(todayOffsetY.toInt())
     }
 
     val content: @Composable () -> Unit = {
@@ -263,17 +246,13 @@ fun WeeklySchedule(
         }
     }
 
-    if (full) {
-        Column(modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 8.dp)) { content() }
-    } else {
-        Column(
-            modifier
-                .fillMaxSize()
-                .verticalScroll(scrollState)
-                .padding(horizontal = 12.dp, vertical = 8.dp),
-        ) {
-            content()
-        }
+    Column(
+        modifier
+            .fillMaxSize()
+            .verticalScroll(scrollState)
+            .padding(horizontal = 12.dp, vertical = 8.dp),
+    ) {
+        content()
     }
 }
 
@@ -314,43 +293,71 @@ fun MonthSchedule(
             Row {
                 weekCells.forEach { date ->
                     if (date == null) {
-                        Box(Modifier.weight(1f).heightIn(min = 64.dp))
-                    } else {
-                        val lessons = lessonsByDate[date].orEmpty()
-                        val isToday = date == today
                         Box(
                             Modifier
                                 .weight(1f)
-                                .heightIn(min = 64.dp)
+                                .heightIn(min = 112.dp)
                                 .padding(1.dp)
                                 .background(
-                                    if (isToday) MaterialTheme.colorScheme.primaryContainer else MaterialTheme.colorScheme.surface,
-                                    MaterialTheme.shapes.small,
+                                    MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.18f),
+                                    androidx.compose.foundation.shape.RoundedCornerShape(10.dp),
+                                ),
+                        )
+                    } else {
+                        val lessons = lessonsByDate[date].orEmpty()
+                        val isToday = date == today
+                        Column(
+                            Modifier
+                                .weight(1f)
+                                .heightIn(min = 112.dp)
+                                .padding(1.dp)
+                                .background(
+                                    if (isToday) MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.45f)
+                                    else MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.35f),
+                                    androidx.compose.foundation.shape.RoundedCornerShape(10.dp),
+                                )
+                                .border(
+                                    1.dp,
+                                    MaterialTheme.colorScheme.outline.copy(alpha = 0.25f),
+                                    androidx.compose.foundation.shape.RoundedCornerShape(10.dp),
                                 )
                                 .clickable { onDayClick(date) }
-                                .padding(3.dp),
+                                .padding(5.dp),
                         ) {
-                            Column {
-                                Text(
-                                    "${date.dayOfMonth}",
-                                    style = MaterialTheme.typography.labelSmall,
-                                    fontWeight = if (isToday) FontWeight.Bold else FontWeight.Normal,
-                                    color = if (isToday) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant,
-                                )
-                                lessons.take(2).forEach { lesson ->
+                            Text(
+                                "${date.dayOfMonth}",
+                                style = MaterialTheme.typography.labelSmall,
+                                fontWeight = if (isToday) FontWeight.Bold else FontWeight.Normal,
+                                color = if (isToday) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant,
+                            )
+                            lessons.take(2).forEach { lesson ->
+                                Column(Modifier.padding(top = 3.dp)) {
                                     Text(
-                                        TimeUtils.minutesToText(lesson.startMinute) + " " + lesson.className,
+                                        TimeUtils.minutesToText(lesson.startMinute),
                                         fontSize = 8.sp,
                                         lineHeight = 10.sp,
+                                        maxLines = 1,
+                                        color = if (lesson.isCancelled) MaterialTheme.colorScheme.outline
+                                        else MaterialTheme.colorScheme.onSurfaceVariant,
+                                    )
+                                    Text(
+                                        lesson.className.take(3),
+                                        fontSize = 9.sp,
+                                        lineHeight = 11.sp,
                                         maxLines = 1,
                                         fontWeight = FontWeight.SemiBold,
                                         color = if (lesson.isCancelled) MaterialTheme.colorScheme.outline
                                         else classColor(lesson.classId),
                                     )
                                 }
-                                if (lessons.size > 2) {
-                                    Text("+${lessons.size - 2}", fontSize = 8.sp, lineHeight = 10.sp)
-                                }
+                            }
+                            if (lessons.size > 2) {
+                                Text(
+                                    "+${lessons.size - 2}",
+                                    fontSize = 8.sp,
+                                    lineHeight = 10.sp,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                )
                             }
                         }
                     }

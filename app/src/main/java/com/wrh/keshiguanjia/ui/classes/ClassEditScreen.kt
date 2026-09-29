@@ -265,21 +265,40 @@ fun ClassEditScreen(classId: Long, onDone: () -> Unit) {
                             Icon(Icons.Filled.Delete, contentDescription = "删除该时间段")
                         }
                     }
+                    // 两行等宽布局：一行 7 个 chip 会超出屏幕宽度把「日」挤出可视区
                     Row(
                         Modifier.fillMaxWidth().padding(top = 4.dp),
-                        horizontalArrangement = androidx.compose.foundation.layout.Arrangement.spacedBy(4.dp),
+                        horizontalArrangement = androidx.compose.foundation.layout.Arrangement.spacedBy(6.dp),
                     ) {
-                        TimeUtils.WEEK_RANGE.forEach { day ->
-                            val selected = day in draft.days
-                            FilterChip(
-                                selected = selected,
-                                onClick = {
+                        TimeUtils.WEEK_RANGE.take(4).forEach { day ->
+                            DayChip(
+                                day = day,
+                                selected = day in draft.days,
+                                onToggle = {
                                     vm.updateTime(
                                         index,
-                                        draft.copy(days = if (selected) draft.days - day else draft.days + day),
+                                        draft.copy(days = if (day in draft.days) draft.days - day else draft.days + day),
                                     )
                                 },
-                                label = { Text(TimeUtils.dayLabel(day).removePrefix("周")) },
+                                modifier = Modifier.weight(1f),
+                            )
+                        }
+                    }
+                    Row(
+                        Modifier.fillMaxWidth().padding(top = 6.dp),
+                        horizontalArrangement = androidx.compose.foundation.layout.Arrangement.spacedBy(6.dp),
+                    ) {
+                        TimeUtils.WEEK_RANGE.drop(4).forEach { day ->
+                            DayChip(
+                                day = day,
+                                selected = day in draft.days,
+                                onToggle = {
+                                    vm.updateTime(
+                                        index,
+                                        draft.copy(days = if (day in draft.days) draft.days - day else draft.days + day),
+                                    )
+                                },
+                                modifier = Modifier.weight(1f),
                             )
                         }
                     }
@@ -369,4 +388,21 @@ fun ClassEditScreen(classId: Long, onDone: () -> Unit) {
             },
         )
     }
+}
+
+/** 单个星期 chip（等宽）。 */
+@Composable
+private fun DayChip(day: Int, selected: Boolean, onToggle: () -> Unit, modifier: Modifier = Modifier) {
+    FilterChip(
+        selected = selected,
+        onClick = onToggle,
+        label = {
+            Text(
+                TimeUtils.dayLabel(day).removePrefix("周"),
+                modifier = Modifier.fillMaxWidth(),
+                textAlign = androidx.compose.ui.text.style.TextAlign.Center,
+            )
+        },
+        modifier = modifier,
+    )
 }

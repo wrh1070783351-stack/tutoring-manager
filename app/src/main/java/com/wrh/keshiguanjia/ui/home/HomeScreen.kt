@@ -5,7 +5,7 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.wrapContentHeight
+import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Card
@@ -143,7 +143,6 @@ fun HomeScreen(onOpenRollCall: (classId: Long, date: LocalDate) -> Unit) {
     var viewMode by rememberSaveable { mutableIntStateOf(0) }
     var selectedDate by remember { mutableStateOf<LocalDate?>(null) }
     var showReminders by remember { mutableStateOf(false) }
-    var capturing by remember { mutableStateOf(false) }
     val capture = rememberCaptureState()
 
     Column(Modifier.fillMaxSize()) {
@@ -163,13 +162,9 @@ fun HomeScreen(onOpenRollCall: (classId: Long, date: LocalDate) -> Unit) {
                 if (viewMode == 0) "schedule-week.png" else "schedule-month.png",
                 captureBlock = if (viewMode == 0) {
                     {
-                        // 长截图：切到全量渲染模式，等两帧布局稳定后捕获完整一周
-                        capturing = true
-                        androidx.compose.runtime.withFrameNanos { }
-                        androidx.compose.runtime.withFrameNanos { }
-                        val bitmap = capture.capture?.invoke()
-                        capturing = false
-                        bitmap
+                        // 生成式：程序绘制完整周表位图（高度自适应，绝不截断）
+                        com.wrh.keshiguanjia.ui.schedule.WeeklyScheduleImage
+                            .render(vm.weekDates, week).asImageBitmap()
                     }
                 } else {
                     null
@@ -211,25 +206,17 @@ fun HomeScreen(onOpenRollCall: (classId: Long, date: LocalDate) -> Unit) {
 
         ShareableBox(
             capture,
-            modifier = if (capturing) {
-                // 截图模式：不限高，让整周内容完整渲染进图层
-                Modifier
-                    .fillMaxWidth()
-                    .wrapContentHeight()
-            } else {
-                Modifier
-                    .weight(1f)
-                    .fillMaxWidth()
-            },
+            modifier = Modifier
+                .weight(1f)
+                .fillMaxWidth(),
         ) {
             if (viewMode == 0) {
                 WeeklySchedule(
                     weekDates = vm.weekDates,
                     lessonsByDate = week,
-                    modifier = Modifier.fillMaxWidth(),
-                    full = capturing,
+                    modifier = Modifier.fillMaxSize(),
                     lessonTrailing = { lesson, date ->
-                        if (!lesson.isCancelled && !capturing) {
+                        if (!lesson.isCancelled) {
                             TextButton(onClick = { onOpenRollCall(lesson.classId, date) }) { Text("点名") }
                         }
                     },
