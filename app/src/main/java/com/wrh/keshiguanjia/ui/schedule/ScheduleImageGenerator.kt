@@ -130,7 +130,7 @@ object WeeklyScheduleImage {
                     RectF(PAD + blockPadH, ly + 6f, PAD + blockPadH + 10f, ly + 6f + 96f), 5f, 5f, barPaint,
                 )
                 val textX = PAD + blockPadH + 38f
-                canvas.drawText(lesson.time, textX, ly + 38f, textPaint(34f, if (lesson.cancelled) CANCELLED else TIME))
+                canvas.drawText(lesson.time, textX, ly + 38f, textPaint(34f, lesson.color))
                 canvas.drawText(lesson.name, textX, ly + 38f + 54f, textPaint(42f, lesson.color, bold = true))
                 ly += 92f
                 if (lesson.extras.isNotBlank()) {

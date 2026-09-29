@@ -467,11 +467,11 @@ private fun RenewDialog(
                     OutlinedTextField(sessionsText, { sessionsText = it }, label = { Text("购买次数 *") }, singleLine = true, modifier = Modifier.fillMaxWidth())
                     OutlinedTextField(bonusText, { bonusText = it }, label = { Text("赠送次数") }, singleLine = true, modifier = Modifier.fillMaxWidth().padding(top = 6.dp))
                     com.wrh.keshiguanjia.ui.DateField("有效期（可选）", validUntilText.ifBlank { java.time.LocalDate.now().toString() }, { validUntilText = it.toString() }, modifier = Modifier.fillMaxWidth().padding(top = 6.dp))
-                    OutlinedTextField(amountText, { amountText = it }, label = { Text("金额（元）") }, singleLine = true, modifier = Modifier.fillMaxWidth().padding(top = 6.dp))
+                    OutlinedTextField(amountText, { amountText = it }, label = { Text("金额（元，可 + - × ÷）") }, singleLine = true, modifier = Modifier.fillMaxWidth().padding(top = 6.dp))
                 } else {
                     com.wrh.keshiguanjia.ui.DateField("开始日期", startDate, { startDate = it.toString() }, modifier = Modifier.fillMaxWidth())
                     com.wrh.keshiguanjia.ui.DateField("结束日期", endDate, { endDate = it.toString() }, modifier = Modifier.fillMaxWidth().padding(top = 6.dp))
-                    OutlinedTextField(amountText, { amountText = it }, label = { Text("金额（元）") }, singleLine = true, modifier = Modifier.fillMaxWidth().padding(top = 6.dp))
+                    OutlinedTextField(amountText, { amountText = it }, label = { Text("金额（元，可 + - × ÷）") }, singleLine = true, modifier = Modifier.fillMaxWidth().padding(top = 6.dp))
                 }
                 Row(Modifier.padding(top = 8.dp), verticalAlignment = Alignment.CenterVertically) {
                     Text("缴费状态：", style = MaterialTheme.typography.bodyMedium)
@@ -673,7 +673,7 @@ private fun EditPackageDialog(
                 OutlinedTextField(sessionsText, { sessionsText = it; error = null }, label = { Text("购买次数") }, singleLine = true, modifier = Modifier.fillMaxWidth())
                 OutlinedTextField(bonusText, { bonusText = it }, label = { Text("赠送次数") }, singleLine = true, modifier = Modifier.fillMaxWidth().padding(top = 6.dp))
                 com.wrh.keshiguanjia.ui.DateField("有效期（可清空）", validUntilText.ifBlank { java.time.LocalDate.now().toString() }, { validUntilText = it.toString() }, modifier = Modifier.fillMaxWidth().padding(top = 6.dp))
-                OutlinedTextField(amountText, { amountText = it; error = null }, label = { Text("金额（元）") }, singleLine = true, modifier = Modifier.fillMaxWidth().padding(top = 6.dp))
+                OutlinedTextField(amountText, { amountText = it; error = null }, label = { Text("金额（元，可 + - × ÷）") }, singleLine = true, modifier = Modifier.fillMaxWidth().padding(top = 6.dp))
                 if (error != null) {
                     Text(error!!, color = MaterialTheme.colorScheme.error, style = MaterialTheme.typography.bodySmall, modifier = Modifier.padding(top = 6.dp))
                 }
@@ -720,7 +720,7 @@ private fun EditTermDialog(
             Column {
                 com.wrh.keshiguanjia.ui.DateField("开始日期", startDate, { startDate = it.toString(); error = null }, modifier = Modifier.fillMaxWidth())
                 com.wrh.keshiguanjia.ui.DateField("结束日期", endDate, { endDate = it.toString(); error = null }, modifier = Modifier.fillMaxWidth().padding(top = 6.dp))
-                OutlinedTextField(amountText, { amountText = it; error = null }, label = { Text("金额（元）") }, singleLine = true, modifier = Modifier.fillMaxWidth().padding(top = 6.dp))
+                OutlinedTextField(amountText, { amountText = it; error = null }, label = { Text("金额（元，可 + - × ÷）") }, singleLine = true, modifier = Modifier.fillMaxWidth().padding(top = 6.dp))
                 if (error != null) {
                     Text(error!!, color = MaterialTheme.colorScheme.error, style = MaterialTheme.typography.bodySmall, modifier = Modifier.padding(top = 6.dp))
                 }
@@ -761,7 +761,7 @@ private fun RegisterPaymentDialog(
         title = { Text("登记缴费") },
         text = {
             Column {
-                OutlinedTextField(amountText, { amountText = it; error = null }, label = { Text("金额（元）") }, singleLine = true, modifier = Modifier.fillMaxWidth())
+                OutlinedTextField(amountText, { amountText = it; error = null }, label = { Text("金额（元，可 + - × ÷）") }, singleLine = true, modifier = Modifier.fillMaxWidth())
                 com.wrh.keshiguanjia.ui.DateField("缴费日期", dateText, { dateText = it.toString() }, modifier = Modifier.fillMaxWidth().padding(top = 6.dp))
                 Row(Modifier.padding(top = 8.dp), verticalAlignment = Alignment.CenterVertically) {
                     Text("方式：", style = MaterialTheme.typography.bodyMedium)

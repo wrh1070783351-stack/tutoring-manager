@@ -200,7 +200,7 @@ fun EnrollScreen(studentId: Long, onDone: () -> Unit) {
             com.wrh.keshiguanjia.ui.DateField("结束日期", state.endDateText, { vm.onEndDate(it.toString()) }, modifier = Modifier.fillMaxWidth().padding(top = 8.dp))
         }
 
-        OutlinedTextField(state.amountText, vm::onAmount, label = { Text("约定金额（元，可留空表示待定）") }, singleLine = true, modifier = Modifier.fillMaxWidth().padding(top = 8.dp))
+        OutlinedTextField(state.amountText, vm::onAmount, label = { Text("约定金额（元，可 + - × ÷）") }, singleLine = true, modifier = Modifier.fillMaxWidth().padding(top = 8.dp))
 
         Text("缴费状态", style = MaterialTheme.typography.titleSmall, modifier = Modifier.padding(top = 12.dp))
         Row {

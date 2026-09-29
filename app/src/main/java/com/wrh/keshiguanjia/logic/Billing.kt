@@ -1,6 +1,7 @@
 package com.wrh.keshiguanjia.logic
 
 import com.wrh.keshiguanjia.data.Enrollment
+import kotlin.math.roundToLong
 
 /** 报名/续费的表单草稿，校验通过后交给仓库落库。 */
 data class BillingDraft(
@@ -66,21 +67,64 @@ object MoneyUtils {
         return if (negative) "-$text" else text
     }
 
-    /** 用户输入的元字符串 -> 分；非法或负数返回 null。"120" -> 12000，"120.5" -> 12050 */
+    /**
+     * 用户输入的元字符串 -> 分；非法或负数返回 null。
+     * 支持基础算式（+ - * / × ÷，先乘除后加减），如 "500+300"、"1200*2-100"，自动算出结果。
+     */
     fun parseYuanToCents(input: String): Long? {
         val trimmed = input.trim().removePrefix("¥").trim()
         if (trimmed.isEmpty()) return null
-        val parts = trimmed.split(".")
-        if (parts.size > 2) return null
-        val yuan = parts[0].toLongOrNull() ?: return null
-        val cents = when (parts.size) {
-            1 -> 0L
-            else -> {
-                if (parts[1].length > 2) return null
-                (parts[1].padEnd(2, '0')).toLongOrNull() ?: return null
-            }
+        val yuan = evaluate(trimmed) ?: return null
+        if (yuan < 0) return null
+        return (yuan * 100).roundToLong()
+    }
+
+    /** 求值只含数字与 + - * / × ÷ 的算式；每个数字最多两位小数；除零/非法返回 null。 */
+    internal fun evaluate(expr: String): Double? {
+        val s = expr.replace("×", "*").replace("÷", "/").filterNot { it == ' ' }
+        if (s.isEmpty()) return null
+        var pos = 0
+
+        fun number(): Double? {
+            val start = pos
+            while (pos < s.length && (s[pos].isDigit() || s[pos] == '.')) pos++
+            if (pos == start) return null
+            val token = s.substring(start, pos)
+            if (token.count { it == '.' } > 1) return null
+            if (token.substringAfter('.', "").length > 2) return null
+            return token.toDoubleOrNull()
         }
-        if (yuan < 0 || cents < 0) return null
-        return yuan * 100 + cents
+
+        fun factor(): Double? = number()
+
+        fun term(): Double? {
+            var acc = factor() ?: return null
+            while (pos < s.length && (s[pos] == '*' || s[pos] == '/')) {
+                val op = s[pos]
+                pos++
+                val rhs = factor() ?: return null
+                if (op == '*') {
+                    acc *= rhs
+                } else {
+                    if (rhs == 0.0) return null
+                    acc /= rhs
+                }
+            }
+            return acc
+        }
+
+        fun expr(): Double? {
+            var acc = term() ?: return null
+            while (pos < s.length && (s[pos] == '+' || s[pos] == '-')) {
+                val op = s[pos]
+                pos++
+                val rhs = term() ?: return null
+                acc = if (op == '+') acc + rhs else acc - rhs
+            }
+            return acc
+        }
+
+        val result = expr()
+        return if (result != null && !result.isNaN() && pos == s.length) result else null
     }
 }

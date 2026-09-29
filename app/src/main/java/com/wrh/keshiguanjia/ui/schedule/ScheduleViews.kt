@@ -221,7 +221,7 @@ fun WeeklySchedule(
                                     (if (lesson.isExtra) " · 加课" else ""),
                                 style = MaterialTheme.typography.labelMedium,
                                 color = if (lesson.isCancelled) MaterialTheme.colorScheme.outline
-                                else MaterialTheme.colorScheme.onSurfaceVariant,
+                                else classColor(lesson.classId),
                             )
                             Text(
                                 lesson.className,
@@ -267,7 +267,13 @@ fun MonthSchedule(
     modifier: Modifier = Modifier,
 ) {
     val today = remember { LocalDate.now() }
-    Column(modifier.fillMaxSize().padding(horizontal = 8.dp)) {
+    val scrollState = rememberScrollState()
+    Column(
+        modifier
+            .fillMaxSize()
+            .verticalScroll(scrollState)
+            .padding(horizontal = 8.dp),
+    ) {
         Row(verticalAlignment = Alignment.CenterVertically) {
             IconButton(onClick = onPrev) { Icon(Icons.Filled.KeyboardArrowLeft, contentDescription = "上个月") }
             Text(
@@ -332,14 +338,14 @@ fun MonthSchedule(
                             )
                             lessons.take(2).forEach { lesson ->
                                 Column(Modifier.padding(top = 3.dp)) {
-                                    Text(
-                                        TimeUtils.minutesToText(lesson.startMinute),
-                                        fontSize = 8.sp,
-                                        lineHeight = 10.sp,
-                                        maxLines = 1,
-                                        color = if (lesson.isCancelled) MaterialTheme.colorScheme.outline
-                                        else MaterialTheme.colorScheme.onSurfaceVariant,
-                                    )
+                            Text(
+                                TimeUtils.minutesToText(lesson.startMinute),
+                                fontSize = 8.sp,
+                                lineHeight = 10.sp,
+                                maxLines = 1,
+                                color = if (lesson.isCancelled) MaterialTheme.colorScheme.outline
+                                else classColor(lesson.classId),
+                            )
                                     Text(
                                         lesson.className.take(3),
                                         fontSize = 9.sp,

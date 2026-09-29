@@ -31,6 +31,26 @@ class MoneyUtilsTest {
         assertNull(MoneyUtils.parseYuanToCents(""))
         assertEquals(12050L, MoneyUtils.parseYuanToCents("¥120.5"))
     }
+
+    @Test
+    fun parseYuan_supportsBasicArithmetic() {
+        assertEquals(30000L, MoneyUtils.parseYuanToCents("100+200"))
+        assertEquals(230000L, MoneyUtils.parseYuanToCents("1200*2-100"))
+        assertEquals(12550L, MoneyUtils.parseYuanToCents("50*2+25.5"))
+        assertEquals(250L, MoneyUtils.parseYuanToCents("10/4"))
+        assertEquals(300L, MoneyUtils.parseYuanToCents("1.5×2"))
+        assertEquals(30L, MoneyUtils.parseYuanToCents("0.1+0.2"))
+        assertEquals(90000L, MoneyUtils.parseYuanToCents("600+600÷2"))
+    }
+
+    @Test
+    fun parseYuan_expressionEdgeCases() {
+        assertNull(MoneyUtils.parseYuanToCents("10/0"))
+        assertNull(MoneyUtils.parseYuanToCents("5+"))
+        assertNull(MoneyUtils.parseYuanToCents("*3"))
+        assertNull(MoneyUtils.parseYuanToCents("100-200")) // 负结果视为非法
+        assertEquals(20000L, MoneyUtils.parseYuanToCents(" 100+100 "))
+    }
 }
 
 class RemainingSessionsTest {
