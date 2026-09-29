@@ -24,6 +24,8 @@ data class TermRecord(
     /** ISO 日期 */
     val startDate: String,
     val endDate: String,
-    /** 金额，单位：分 */
+    /** 金额，单位：分（期末计次类型在结算时写回 = 累计次数 × 单价） */
     val amountCents: Long,
+    /** 期末计次单价（分/次），仅计费类型=期末计次时使用 */
+    val unitPriceCents: Long = 0,
 )

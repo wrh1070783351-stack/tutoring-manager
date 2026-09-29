@@ -31,12 +31,13 @@ data class Enrollment(
     @PrimaryKey(autoGenerate = true) val id: Long = 0,
     val studentId: Long,
     val classId: Long,
-    /** 0 = 次卡制，1 = 学期制 */
+    /** 0 = 次卡制，1 = 学期制，2 = 期末计次（一对一，按到课累计、学期末按次数×单价结算） */
     val billingType: Int = BILLING_SESSIONS,
     val createdAt: Long = System.currentTimeMillis(),
 ) {
     companion object {
         const val BILLING_SESSIONS = 0
         const val BILLING_TERM = 1
+        const val BILLING_TERM_SESSIONS = 2
     }
 }

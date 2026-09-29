@@ -116,4 +116,28 @@ class BillingValidateTest {
         assertNotNull(Billing.validate(draft(0) { copy(classId = 0) }))
         assertNotNull(Billing.validate(draft(0) { copy(payDate = "2026/09/29") }))
     }
+
+    private fun termSessionDraft(modify: BillingDraft.() -> BillingDraft = { this }) =
+        BillingDraft(
+            classId = 1, billingType = 2,
+            startDate = "2026-09-01", endDate = "2027-01-31",
+            unitPriceCents = 20000, amountCents = 0, payDate = "2026-09-29",
+        ).modify()
+
+    @Test
+    fun termSessions_validPasses() {
+        assertNull(Billing.validate(termSessionDraft()))
+    }
+
+    @Test
+    fun termSessions_needsPositiveUnitPrice() {
+        assertNotNull(Billing.validate(termSessionDraft { copy(unitPriceCents = 0) }))
+        assertNotNull(Billing.validate(termSessionDraft { copy(unitPriceCents = -1) }))
+    }
+
+    @Test
+    fun termSessions_needsValidRange() {
+        assertNotNull(Billing.validate(termSessionDraft { copy(endDate = "bad") }))
+        assertNotNull(Billing.validate(termSessionDraft { copy(startDate = "2027-02-01") }))
+    }
 }

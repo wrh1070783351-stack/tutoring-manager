@@ -10,6 +10,21 @@ import androidx.room.Transaction
 import androidx.room.Update
 import kotlinx.coroutines.flow.Flow
 
+/** 期末计次：各学期记录的到课累计行 */
+data class TermCountRow(
+    val enrollmentId: Long,
+    val startDate: String,
+    val endDate: String,
+    val attended: Int,
+)
+
+/** 学生到课统计行（带班级信息） */
+data class AttendanceWithClass(
+    @Embedded val attendance: Attendance,
+    @Relation(parentColumn = "classId", entityColumn = "id")
+    val clazz: ClassRoom,
+)
+
 /** 报名及其班级、课时包/学期记录、学生的聚合查询结果。 */
 data class EnrollmentWithDetails(
     @Embedded val enrollment: Enrollment,
@@ -69,6 +84,9 @@ interface TermRecordDao {
 
     @Insert
     suspend fun insert(term: TermRecord): Long
+
+    @Query("SELECT * FROM term_records WHERE id = :id")
+    suspend fun getById(id: Long): TermRecord?
 
     @Update
     suspend fun update(term: TermRecord)
@@ -150,6 +168,26 @@ interface AttendanceDao {
         "SELECT COUNT(*) FROM attendance WHERE status IN (0, 2) AND date BETWEEN :startIso AND :endIso"
     )
     fun observeConsumedBetween(startIso: String, endIso: String): Flow<Int>
+
+    /** 各学期记录（期末计次）的到课累计数：只统计到课，落在学期起止日期内。 */
+    @Query(
+        "SELECT tr.enrollmentId AS enrollmentId, tr.startDate AS startDate, tr.endDate AS endDate, " +
+            "(SELECT COUNT(*) FROM attendance a WHERE a.enrollmentId = tr.enrollmentId AND a.status = 0 " +
+            "AND a.date BETWEEN tr.startDate AND tr.endDate) AS attended " +
+            "FROM term_records tr"
+    )
+    fun observeTermAttendedCounts(): Flow<List<TermCountRow>>
+
+    @Query(
+        "SELECT COUNT(*) FROM attendance WHERE enrollmentId = :enrollmentId AND status = 0 " +
+            "AND date BETWEEN :startIso AND :endIso"
+    )
+    suspend fun countAttendedBetween(enrollmentId: Long, startIso: String, endIso: String): Int
+
+    /** 学生的全部到课记录（带班级信息），按日期倒序。 */
+    @Transaction
+    @Query("SELECT * FROM attendance WHERE studentId = :studentId AND status = 0 ORDER BY date DESC")
+    fun observeAttendedForStudent(studentId: Long): Flow<List<AttendanceWithClass>>
 
     @Query("DELETE FROM attendance WHERE id = :id")
     suspend fun deleteById(id: Long)

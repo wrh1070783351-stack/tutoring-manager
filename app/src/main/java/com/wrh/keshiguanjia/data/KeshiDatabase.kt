@@ -13,7 +13,7 @@ import androidx.sqlite.db.SupportSQLiteDatabase
         Enrollment::class, ClassPackage::class, TermRecord::class,
         Payment::class, LessonOverride::class, Attendance::class,
     ],
-    version = 3,
+    version = 4,
     exportSchema = false,
 )
 abstract class KeshiDatabase : RoomDatabase() {
@@ -124,9 +124,16 @@ abstract class KeshiDatabase : RoomDatabase() {
             }
         }
 
+        /** v3 → v4：term_records 增加期末计次单价列。 */
+        val MIGRATION_3_4 = object : Migration(3, 4) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL("ALTER TABLE `term_records` ADD COLUMN `unitPriceCents` INTEGER NOT NULL DEFAULT 0")
+            }
+        }
+
         fun build(context: Context): KeshiDatabase =
             Room.databaseBuilder(context, KeshiDatabase::class.java, NAME)
-                .addMigrations(MIGRATION_1_2, MIGRATION_2_3)
+                .addMigrations(MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4)
                 .build()
     }
 }

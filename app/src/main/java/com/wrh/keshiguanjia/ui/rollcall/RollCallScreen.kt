@@ -214,7 +214,7 @@ private fun RollCallRow(
                     )
                 } else {
                     Text(
-                        "学期制",
+                        if (details.enrollment.billingType == Enrollment.BILLING_TERM_SESSIONS) "期末计次" else "学期制",
                         style = MaterialTheme.typography.labelMedium,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                     )

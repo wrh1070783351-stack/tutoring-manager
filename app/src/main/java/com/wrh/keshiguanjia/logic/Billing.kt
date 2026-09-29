@@ -11,7 +11,7 @@ data class BillingDraft(
     val bonusSessions: Int = 0,
     val startDate: String? = null,
     val endDate: String? = null,
-    /** 金额，单位：分（约定价格；未收时也记录，便于期末对账） */
+    /** 金额，单位：分（约定价格；未收时也记录，便于期末对账；期末计次类型结算时才写回） */
     val amountCents: Long = 0,
     val payDate: String,
     val method: Int = 0,
@@ -20,6 +20,8 @@ data class BillingDraft(
     val validUntil: String? = null,
     /** false = 定课未缴费（期末一起结），不生成缴费记录 */
     val paymentReceived: Boolean = true,
+    /** 期末计次单价（分/次） */
+    val unitPriceCents: Long = 0,
 )
 
 object Billing {
@@ -40,11 +42,12 @@ object Billing {
         draft.classId <= 0 -> "请选择班级"
         draft.billingType == Enrollment.BILLING_SESSIONS && draft.sessions <= 0 -> "购买次数必须大于 0"
         draft.billingType == Enrollment.BILLING_SESSIONS && draft.bonusSessions < 0 -> "赠送次数不能为负"
-        draft.billingType == Enrollment.BILLING_TERM && draft.startDate.isNullOrBlank() -> "请填写开始日期"
-        draft.billingType == Enrollment.BILLING_TERM && (draft.endDate.isNullOrBlank() ||
-            dateOrNull(draft.endDate!!) == null) -> "结束日期格式应为 yyyy-MM-dd"
-        draft.billingType == Enrollment.BILLING_TERM &&
+        draft.billingType != Enrollment.BILLING_SESSIONS && draft.startDate.isNullOrBlank() -> "请填写开始日期"
+        draft.billingType != Enrollment.BILLING_SESSIONS &&
+            (draft.endDate.isNullOrBlank() || dateOrNull(draft.endDate!!) == null) -> "结束日期格式应为 yyyy-MM-dd"
+        draft.billingType != Enrollment.BILLING_SESSIONS &&
             (dateOrNull(draft.startDate!!) == null || draft.startDate > draft.endDate!!) -> "开始日期必须早于或等于结束日期"
+        draft.billingType == Enrollment.BILLING_TERM_SESSIONS && draft.unitPriceCents <= 0 -> "单价必须大于 0"
         draft.amountCents < 0 -> "金额不能为负"
         dateOrNull(draft.payDate) == null -> "缴费日期格式应为 yyyy-MM-dd"
         else -> null

@@ -77,6 +77,11 @@ class ClassDetailViewModel(
     val consumedAll: StateFlow<Map<Long, Int>> = repo.observeConsumedAll()
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyMap())
 
+    /** 期末计次的到课累计 */
+    val termCounts: StateFlow<List<com.wrh.keshiguanjia.data.TermCountRow>> =
+        Graph.enrollmentRepository.observeTermAttendedCounts()
+            .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyList())
+
     fun addStudent(studentId: Long, billingType: Int, amountText: String, onResult: (String?) -> Unit) {
         viewModelScope.launch {
             if (repo.countFor(studentId, classId) > 0) {
@@ -131,6 +136,7 @@ fun ClassDetailScreen(
     val rows by vm.rows.collectAsStateWithLifecycle()
     val students by vm.students.collectAsStateWithLifecycle()
     val consumedAll by vm.consumedAll.collectAsStateWithLifecycle()
+    val termCounts by vm.termCounts.collectAsStateWithLifecycle()
     var showAdd by remember { mutableStateOf(false) }
     var removeTarget by remember { mutableStateOf<EnrollmentWithDetails?>(null) }
 
@@ -195,7 +201,16 @@ fun ClassDetailScreen(
                 ListItem(
                     headlineContent = { Text(row.student.name, fontWeight = FontWeight.SemiBold) },
                     supportingContent = {
-                        if (row.enrollment.billingType == Enrollment.BILLING_SESSIONS) {
+                        if (row.enrollment.billingType == Enrollment.BILLING_TERM_SESSIONS) {
+                            val latest = row.termRecords.maxByOrNull { it.endDate }
+                            val count = latest?.let { t ->
+                                termCounts.firstOrNull { it.enrollmentId == row.enrollment.id && it.endDate == t.endDate }?.attended
+                            } ?: 0
+                            Text(
+                                "期末计次 · 已上 $count 次",
+                                style = MaterialTheme.typography.bodySmall,
+                            )
+                        } else if (row.enrollment.billingType == Enrollment.BILLING_SESSIONS) {
                             val remaining = Billing.remainingSessions(row.packages, consumed)
                             Text(
                                 "次卡 · 剩余 $remaining 次",

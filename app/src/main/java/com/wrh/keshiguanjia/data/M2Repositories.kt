@@ -51,12 +51,13 @@ class EnrollmentRepository(
                     validUntil = draft.validUntil,
                 )
             )
-            Enrollment.BILLING_TERM -> termDao.insert(
+            Enrollment.BILLING_TERM, Enrollment.BILLING_TERM_SESSIONS -> termDao.insert(
                 TermRecord(
                     enrollmentId = enrollmentId,
                     startDate = draft.startDate!!,
                     endDate = draft.endDate!!,
                     amountCents = draft.amountCents,
+                    unitPriceCents = draft.unitPriceCents,
                 )
             )
         }
@@ -94,6 +95,23 @@ class EnrollmentRepository(
     suspend fun deletePackageById(id: Long) = packageDao.deleteById(id)
     suspend fun updateTerm(term: TermRecord) = termDao.update(term)
     suspend fun deleteTermById(id: Long) = termDao.deleteById(id)
+
+    // ---- 期末计次（一对一：到课累计、学期末结算）----
+
+    fun observeTermAttendedCounts(): Flow<List<TermCountRow>> = attendanceDao.observeTermAttendedCounts()
+
+    fun observeAttendedForStudent(studentId: Long): Flow<List<AttendanceWithClass>> =
+        attendanceDao.observeAttendedForStudent(studentId)
+
+    /**
+     * 期末结算：累计学期窗口内的到课次数 × 单价 → 写回学期金额（之后自然进入未收/欠费体系）。
+     * 返回结算的到课次数。
+     */
+    suspend fun settleTerm(term: TermRecord): Int {
+        val count = attendanceDao.countAttendedBetween(term.enrollmentId, term.startDate, term.endDate)
+        termDao.update(term.copy(amountCents = count.toLong() * term.unitPriceCents))
+        return count
+    }
 
     /** 从班级移除学生：删除报名（级联删课时包/学期/考勤/关联缴费不动——缴费流水保留作历史）。 */
     suspend fun deleteEnrollment(id: Long) = enrollmentDao.deleteById(id)

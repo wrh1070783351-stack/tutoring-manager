@@ -75,6 +75,7 @@ class EnrollViewModel(
         val method: Int = 1,
         /** true = 当场收费；false = 定课未缴费（期末一起结） */
         val paidNow: Boolean = true,
+        val unitPriceText: String = "",
         val error: String? = null,
     )
 
@@ -92,27 +93,39 @@ class EnrollViewModel(
     fun onPayDate(v: String) = _state.update { it.copy(payDateText = v) }
     fun onMethod(v: Int) = _state.update { it.copy(method = v) }
     fun onPaidNow(v: Boolean) = _state.update { it.copy(paidNow = v, error = null) }
+    fun onUnitPrice(v: String) = _state.update { it.copy(unitPriceText = v, error = null) }
 
     /** 保存成功返回 true。 */
     suspend fun save(): Boolean {
         val s = _state.value
+        val isTermSessions = s.billingType == Enrollment.BILLING_TERM_SESSIONS
         val amountCents = if (s.amountText.isBlank()) 0L else MoneyUtils.parseYuanToCents(s.amountText)
         if (s.amountText.isNotBlank() && amountCents == null) {
             _state.update { it.copy(error = "金额格式错误") }
             return false
+        }
+        var unitPriceCents = 0L
+        if (isTermSessions) {
+            val parsed = MoneyUtils.parseYuanToCents(s.unitPriceText)
+            if (parsed == null || parsed <= 0) {
+                _state.update { it.copy(error = "单价必须大于 0") }
+                return false
+            }
+            unitPriceCents = parsed
         }
         val draft = BillingDraft(
             classId = s.classId,
             billingType = s.billingType,
             sessions = s.sessionsText.toIntOrNull() ?: 0,
             bonusSessions = s.bonusText.toIntOrNull() ?: 0,
-            startDate = if (s.billingType == Enrollment.BILLING_TERM) s.startDateText.trim() else null,
-            endDate = if (s.billingType == Enrollment.BILLING_TERM) s.endDateText.trim() else null,
+            startDate = if (s.billingType != Enrollment.BILLING_SESSIONS) s.startDateText.trim() else null,
+            endDate = if (s.billingType != Enrollment.BILLING_SESSIONS) s.endDateText.trim() else null,
             amountCents = amountCents ?: 0,
             payDate = s.payDateText.trim(),
             method = s.method,
             validUntil = s.validUntilText.trim().ifBlank { null },
             paymentReceived = s.paidNow,
+            unitPriceCents = unitPriceCents,
         )
         Billing.validate(draft)?.let { err ->
             _state.update { it.copy(error = err) }
@@ -189,6 +202,12 @@ fun EnrollScreen(studentId: Long, onDone: () -> Unit) {
                 label = { Text("学期") },
                 modifier = Modifier.padding(start = 8.dp),
             )
+            FilterChip(
+                selected = state.billingType == Enrollment.BILLING_TERM_SESSIONS,
+                onClick = { vm.onBillingType(Enrollment.BILLING_TERM_SESSIONS) },
+                label = { Text("期末计次") },
+                modifier = Modifier.padding(start = 8.dp),
+            )
         }
 
         if (state.billingType == Enrollment.BILLING_SESSIONS) {
@@ -200,45 +219,55 @@ fun EnrollScreen(studentId: Long, onDone: () -> Unit) {
             com.wrh.keshiguanjia.ui.DateField("结束日期", state.endDateText, { vm.onEndDate(it.toString()) }, modifier = Modifier.fillMaxWidth().padding(top = 8.dp))
         }
 
-        OutlinedTextField(state.amountText, vm::onAmount, label = { Text("约定金额（元，可 + - × ÷）") }, singleLine = true, modifier = Modifier.fillMaxWidth().padding(top = 8.dp))
-
-        Text("缴费状态", style = MaterialTheme.typography.titleSmall, modifier = Modifier.padding(top = 12.dp))
-        Row {
-            FilterChip(
-                selected = state.paidNow,
-                onClick = { vm.onPaidNow(true) },
-                label = { Text("已收") },
-            )
-            FilterChip(
-                selected = !state.paidNow,
-                onClick = { vm.onPaidNow(false) },
-                label = { Text("未收 · 期末结") },
-                modifier = Modifier.padding(start = 8.dp),
-            )
-        }
-
-        if (state.paidNow) {
-            Text("缴费日期", style = MaterialTheme.typography.titleSmall, modifier = Modifier.padding(top = 12.dp))
-            com.wrh.keshiguanjia.ui.DateField("缴费日期", state.payDateText, { vm.onPayDate(it.toString()) }, modifier = Modifier.fillMaxWidth().padding(top = 4.dp))
-
-            Text("缴费方式", style = MaterialTheme.typography.titleSmall, modifier = Modifier.padding(top = 12.dp))
-            Row {
-                Payment.METHOD_LABELS.take(3).forEachIndexed { i, label ->
-                    FilterChip(
-                        selected = state.method == i,
-                        onClick = { vm.onMethod(i) },
-                        label = { Text(label) },
-                        modifier = Modifier.padding(start = if (i == 0) 0.dp else 8.dp),
-                    )
-                }
-            }
-        } else {
+        if (state.billingType == Enrollment.BILLING_TERM_SESSIONS) {
+            OutlinedTextField(state.unitPriceText, vm::onUnitPrice, label = { Text("单价（元/次，可 + - × ÷）*") }, singleLine = true, modifier = Modifier.fillMaxWidth().padding(top = 8.dp))
             Text(
-                "将登记为欠款，收款后可在学生详情页补记缴费",
+                "一对一签到制：每次到课累计 1 次，学期末按 累计次数 × 单价 结算收费",
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
-                modifier = Modifier.padding(top = 8.dp),
+                modifier = Modifier.padding(top = 6.dp),
             )
+        } else {
+            OutlinedTextField(state.amountText, vm::onAmount, label = { Text("约定金额（元，可 + - × ÷）") }, singleLine = true, modifier = Modifier.fillMaxWidth().padding(top = 8.dp))
+
+            Text("缴费状态", style = MaterialTheme.typography.titleSmall, modifier = Modifier.padding(top = 12.dp))
+            Row {
+                FilterChip(
+                    selected = state.paidNow,
+                    onClick = { vm.onPaidNow(true) },
+                    label = { Text("已收") },
+                )
+                FilterChip(
+                    selected = !state.paidNow,
+                    onClick = { vm.onPaidNow(false) },
+                    label = { Text("未收 · 期末结") },
+                    modifier = Modifier.padding(start = 8.dp),
+                )
+            }
+
+            if (state.paidNow) {
+                Text("缴费日期", style = MaterialTheme.typography.titleSmall, modifier = Modifier.padding(top = 12.dp))
+                com.wrh.keshiguanjia.ui.DateField("缴费日期", state.payDateText, { vm.onPayDate(it.toString()) }, modifier = Modifier.fillMaxWidth().padding(top = 4.dp))
+
+                Text("缴费方式", style = MaterialTheme.typography.titleSmall, modifier = Modifier.padding(top = 12.dp))
+                Row {
+                    Payment.METHOD_LABELS.take(3).forEachIndexed { i, label ->
+                        FilterChip(
+                            selected = state.method == i,
+                            onClick = { vm.onMethod(i) },
+                            label = { Text(label) },
+                            modifier = Modifier.padding(start = if (i == 0) 0.dp else 8.dp),
+                        )
+                    }
+                }
+            } else {
+                Text(
+                    "将登记为欠款，收款后可在学生详情页补记缴费",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    modifier = Modifier.padding(top = 8.dp),
+                )
+            }
         }
         Spacer(Modifier.padding(bottom = 24.dp))
     }

@@ -3,6 +3,7 @@ package com.wrh.keshiguanjia
 import androidx.room.Room
 import androidx.test.core.app.ApplicationProvider
 import androidx.test.ext.junit.runners.AndroidJUnit4
+import com.wrh.keshiguanjia.data.Attendance
 import com.wrh.keshiguanjia.data.ClassRoom
 import com.wrh.keshiguanjia.data.Enrollment
 import com.wrh.keshiguanjia.data.Graph
@@ -154,5 +155,56 @@ class EnrollmentRepositoryTest {
         // 课时包随报名级联删除；缴费流水保留（历史记录）
         assertTrue(repo.observeForStudent(studentId).first().isEmpty())
         assertEquals(1, repo.observePaymentsForStudent(studentId).first().size)
+    }
+
+    @Test
+    fun termSessions_accumulateAttendedOnly_thenSettle() = runBlocking {
+        val eid = repo.enroll(
+            studentId,
+            BillingDraft(
+                classId = classId, billingType = Enrollment.BILLING_TERM_SESSIONS,
+                startDate = "2026-09-01", endDate = "2027-01-31",
+                unitPriceCents = 20000, payDate = "2026-09-01",
+            ),
+        )
+        // 到课 2 次 + 请假 1 + 缺勤 1 + 学期窗口外的到课 1 → 只计窗口内到课 2 次
+        repo.markAttendance(studentId, eid, classId, "2026-09-10", Attendance.STATUS_ATTENDED)
+        repo.markAttendance(studentId, eid, classId, "2026-09-17", Attendance.STATUS_ATTENDED)
+        repo.markAttendance(studentId, eid, classId, "2026-09-24", Attendance.STATUS_LEAVE)
+        repo.markAttendance(studentId, eid, classId, "2026-10-01", Attendance.STATUS_ABSENT)
+        repo.markAttendance(studentId, eid, classId, "2026-08-20", Attendance.STATUS_ATTENDED)
+
+        val term = repo.observeForStudent(studentId).first().single().termRecords.single()
+        assertEquals(20000L, term.unitPriceCents)
+        assertEquals(0L, term.amountCents) // 未结算
+
+        val count = repo.settleTerm(term)
+        assertEquals(2, count)
+        val settled = repo.observeForStudent(studentId).first().single().termRecords.single()
+        assertEquals(40000L, settled.amountCents)
+        // 结算只登记应收，不自动生成缴费流水（收款走登记缴费）
+        assertEquals(0, repo.observePaymentsForStudent(studentId).first().size)
+    }
+
+    @Test
+    fun termCountsAndAttendedStats() = runBlocking {
+        val eid = repo.enroll(
+            studentId,
+            BillingDraft(
+                classId = classId, billingType = Enrollment.BILLING_TERM_SESSIONS,
+                startDate = "2026-09-01", endDate = "2027-01-31",
+                unitPriceCents = 20000, payDate = "2026-09-01",
+            ),
+        )
+        repo.markAttendance(studentId, eid, classId, "2026-09-10", Attendance.STATUS_ATTENDED)
+        repo.markAttendance(studentId, eid, classId, "2026-09-17", Attendance.STATUS_LEAVE)
+
+        val counts = db.attendanceDao().observeTermAttendedCounts().first()
+        val row = counts.single { it.enrollmentId == eid }
+        assertEquals(1, row.attended)
+
+        val stats = db.attendanceDao().observeAttendedForStudent(studentId).first()
+        assertEquals(1, stats.size)
+        assertEquals(classId, stats[0].attendance.classId)
     }
 }

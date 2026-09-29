@@ -28,6 +28,11 @@ object CsvExporter {
         sb.appendLine("学生,班级,计费类型,已购次数,已消次数,剩余次数,有效期至,约定金额,已收金额,未收金额")
         enrollments.forEach { e ->
             val isSessions = e.enrollment.billingType == Enrollment.BILLING_SESSIONS
+            val typeLabel = when (e.enrollment.billingType) {
+                Enrollment.BILLING_TERM_SESSIONS -> "期末计次"
+                Enrollment.BILLING_TERM -> "学期"
+                else -> "次卡"
+            }
             val purchased = if (isSessions) com.wrh.keshiguanjia.logic.Billing.purchasedSessions(e.packages) else 0
             val consumed = consumedByEnrollment[e.enrollment.id] ?: 0
             val remaining = if (isSessions) (purchased - consumed) else 0
@@ -41,7 +46,7 @@ object CsvExporter {
             sb.appendLine(
                 listOf(
                     esc(e.student.name), esc(e.clazz.name),
-                    if (isSessions) "次卡" else "学期",
+                    typeLabel,
                     if (isSessions) purchased.toString() else "",
                     if (isSessions) consumed.toString() else "",
                     if (isSessions) remaining.toString() else "",

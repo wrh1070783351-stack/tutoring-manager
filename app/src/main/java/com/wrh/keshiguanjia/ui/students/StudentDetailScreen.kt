@@ -1,5 +1,8 @@
 package com.wrh.keshiguanjia.ui.students
 
+import androidx.compose.foundation.background
+import androidx.compose.foundation.horizontalScroll
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -8,6 +11,7 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
@@ -45,6 +49,7 @@ import com.wrh.keshiguanjia.data.Enrollment
 import com.wrh.keshiguanjia.data.EnrollmentWithDetails
 import com.wrh.keshiguanjia.data.Graph
 import com.wrh.keshiguanjia.data.Payment
+import com.wrh.keshiguanjia.data.TermRecord
 import com.wrh.keshiguanjia.logic.Billing
 import com.wrh.keshiguanjia.logic.BillingDraft
 import com.wrh.keshiguanjia.logic.MoneyUtils
@@ -128,6 +133,16 @@ class StudentDetailViewModel(
         enrollmentRepository.observeConsumedForStudent(studentId)
             .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyMap())
 
+    /** 期末计次：各学期记录的到课累计 */
+    val termCounts: StateFlow<List<com.wrh.keshiguanjia.data.TermCountRow>> =
+        enrollmentRepository.observeTermAttendedCounts()
+            .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyList())
+
+    /** 学生全部到课记录（到课统计用） */
+    val attendedRecords: StateFlow<List<com.wrh.keshiguanjia.data.AttendanceWithClass>> =
+        enrollmentRepository.observeAttendedForStudent(studentId)
+            .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyList())
+
     fun renew(enrollment: EnrollmentWithDetails, draft: BillingDraft, onResult: (String?) -> Unit) {
         viewModelScope.launch {
             Billing.validate(draft.copy(classId = enrollment.enrollment.classId))?.let { onResult(it) }
@@ -178,6 +193,11 @@ class StudentDetailViewModel(
         enrollmentRepository.deleteTermById(id)
     }
 
+    /** 期末结算：到课次数 × 单价 写回学期金额（登记为应收）。返回结算次数。 */
+    fun settleTerm(term: TermRecord, onDone: (Int) -> Unit) {
+        viewModelScope.launch { onDone(enrollmentRepository.settleTerm(term)) }
+    }
+
     companion object {
         fun factory(studentId: Long) = object : ViewModelProvider.Factory {
             @Suppress("UNCHECKED_CAST")
@@ -205,8 +225,11 @@ fun StudentDetailScreen(
     val enrollments by vm.enrollments.collectAsStateWithLifecycle()
     val payments by vm.payments.collectAsStateWithLifecycle()
     val consumedByEnrollment by vm.consumedByEnrollment.collectAsStateWithLifecycle()
+    val termCounts by vm.termCounts.collectAsStateWithLifecycle()
+    val attendedRecords by vm.attendedRecords.collectAsStateWithLifecycle()
     var renewTarget by remember { mutableStateOf<EnrollmentWithDetails?>(null) }
     var payTarget by remember { mutableStateOf<Pair<EnrollmentWithDetails, Long>?>(null) }
+    var settleTarget by remember { mutableStateOf<Pair<EnrollmentWithDetails, com.wrh.keshiguanjia.data.TermCountRow>?>(null) }
     var editPkgTarget by remember { mutableStateOf<com.wrh.keshiguanjia.data.ClassPackage?>(null) }
     var deletePkgTarget by remember { mutableStateOf<com.wrh.keshiguanjia.data.ClassPackage?>(null) }
     var editTermTarget by remember { mutableStateOf<com.wrh.keshiguanjia.data.TermRecord?>(null) }
@@ -268,7 +291,11 @@ fun StudentDetailScreen(
                             modifier = Modifier.weight(1f),
                         )
                         Text(
-                            if (ew.enrollment.billingType == Enrollment.BILLING_SESSIONS) "次卡" else "学期",
+                            when (ew.enrollment.billingType) {
+                                Enrollment.BILLING_SESSIONS -> "次卡"
+                                Enrollment.BILLING_TERM_SESSIONS -> "期末计次"
+                                else -> "学期"
+                            },
                             style = MaterialTheme.typography.labelSmall,
                             color = MaterialTheme.colorScheme.primary,
                         )
@@ -282,6 +309,22 @@ fun StudentDetailScreen(
                             "剩余 $remaining 次（已购 $purchased）" + (validUntil?.let { "，有效期至 $it" } ?: ""),
                             style = MaterialTheme.typography.bodySmall,
                             color = if (remaining <= 3) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.onSurfaceVariant,
+                        )
+                    } else if (ew.enrollment.billingType == Enrollment.BILLING_TERM_SESSIONS) {
+                        val latest = ew.termRecords.maxByOrNull { it.endDate }
+                        val count = latest?.let { t ->
+                            termCounts.firstOrNull { it.enrollmentId == ew.enrollment.id && it.endDate == t.endDate }?.attended
+                        } ?: 0
+                        val unit = latest?.unitPriceCents ?: 0
+                        Text(
+                            "本学期已上 $count 次" + (if (unit > 0) " · 单价 ¥" + MoneyUtils.yuanText(unit) + "/次" else ""),
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        )
+                        Text(
+                            latest?.let { "本期至 ${it.endDate}" } ?: "未设置期限",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
                         )
                     } else {
                         val until = Billing.termValidUntil(ew.termRecords.map { it.endDate })
@@ -301,8 +344,11 @@ fun StudentDetailScreen(
                         )
                     }
                     ew.termRecords.forEach { term ->
+                        val isTermSessions = ew.enrollment.billingType == Enrollment.BILLING_TERM_SESSIONS
                         BillingRecordRow(
-                            label = "学期 ${term.startDate} ~ ${term.endDate} · ¥" + MoneyUtils.yuanText(term.amountCents),
+                            label = (if (isTermSessions) "计次期 " else "学期 ") + "${term.startDate} ~ ${term.endDate} · ¥" +
+                                MoneyUtils.yuanText(term.amountCents) +
+                                (if (isTermSessions && term.unitPriceCents > 0) "（单价 ¥" + MoneyUtils.yuanText(term.unitPriceCents) + "/次）" else ""),
                             onEdit = { editTermTarget = term },
                             onDelete = { deleteTermTarget = term },
                         )
@@ -312,6 +358,22 @@ fun StudentDetailScreen(
                     val paid = payments.filter { it.enrollmentId == ew.enrollment.id }.sumOf { it.amountCents }
                     val unpaid = billed - paid
                     Row(verticalAlignment = Alignment.CenterVertically) {
+                        if (ew.enrollment.billingType == Enrollment.BILLING_TERM_SESSIONS) {
+                            val latest = ew.termRecords.maxByOrNull { it.endDate }
+                            val unsettled = latest != null && latest.amountCents == 0L && latest.unitPriceCents > 0
+                            if (unsettled && latest != null) {
+                                TextButton(onClick = {
+                                    termCounts.firstOrNull { it.enrollmentId == ew.enrollment.id && it.endDate == latest.endDate }
+                                        ?.let { settleTarget = ew to it }
+                                }) { Text("期末结算") }
+                            } else if (latest != null && latest.amountCents > 0) {
+                                Text(
+                                    "已结算 ¥" + MoneyUtils.yuanText(latest.amountCents),
+                                    style = MaterialTheme.typography.labelSmall,
+                                    color = MaterialTheme.colorScheme.tertiary,
+                                )
+                            }
+                        }
                         TextButton(onClick = { renewTarget = ew }) { Text("续费") }
                         if (unpaid > 0) {
                             Text(
@@ -369,6 +431,10 @@ fun StudentDetailScreen(
             }
         }
         Spacer(Modifier.padding(bottom = 16.dp))
+
+        AttendanceStatsSection(
+            records = attendedRecords,
+        )
     }
 
     renewTarget?.let { target ->
@@ -387,6 +453,29 @@ fun StudentDetailScreen(
         ) { cents, method, date, onResult ->
             vm.registerPayment(target, cents, method, date, onResult)
         }
+    }
+
+    settleTarget?.let { (ew, row) ->
+        val term = ew.termRecords.firstOrNull { it.enrollmentId == ew.enrollment.id && it.endDate == row.endDate }
+        val amount = row.attended.toLong() * (term?.unitPriceCents ?: 0)
+        AlertDialog(
+            onDismissRequest = { settleTarget = null },
+            title = { Text("期末结算") },
+            text = {
+                Text(
+                    "「${ew.student.name}」在 ${ew.clazz.name} 本期（${row.startDate} ~ ${row.endDate}）" +
+                        "到课 ${row.attended} 次 × 单价 ¥${MoneyUtils.yuanText(term?.unitPriceCents ?: 0)}/次" +
+                        " = ¥${MoneyUtils.yuanText(amount)}，将登记为应收（未收）。确定结算？"
+                )
+            },
+            confirmButton = {
+                TextButton(onClick = {
+                    term?.let { vm.settleTerm(it) { _ -> } }
+                    settleTarget = null
+                }) { Text("结算") }
+            },
+            dismissButton = { TextButton(onClick = { settleTarget = null }) { Text("取消") } },
+        )
     }
 
     editPkgTarget?.let { pkg ->
@@ -447,6 +536,7 @@ private fun RenewDialog(
     onConfirm: (BillingDraft, (String?) -> Unit) -> Unit,
 ) {
     val isSessions = enrollment.enrollment.billingType == Enrollment.BILLING_SESSIONS
+    val isTermSessions = enrollment.enrollment.billingType == Enrollment.BILLING_TERM_SESSIONS
     val today = remember { LocalDate.now().toString() }
     var sessionsText by remember { mutableStateOf(if (isSessions) "20" else "") }
     var bonusText by remember { mutableStateOf("0") }
@@ -454,13 +544,14 @@ private fun RenewDialog(
     var validUntilText by remember { mutableStateOf("") }
     var startDate by remember { mutableStateOf(today) }
     var endDate by remember { mutableStateOf(LocalDate.now().plusMonths(4).toString()) }
+    var unitPriceText by remember { mutableStateOf("") }
     var method by remember { mutableStateOf(1) }
     var paidNow by remember { mutableStateOf(true) }
     var error by remember { mutableStateOf<String?>(null) }
 
     AlertDialog(
         onDismissRequest = onDismiss,
-        title = { Text(if (isSessions) "续费课时包" else "续期学期") },
+        title = { Text(if (isSessions) "续费课时包" else if (isTermSessions) "续期（期末计次）" else "续期学期") },
         text = {
             Column {
                 if (isSessions) {
@@ -471,33 +562,45 @@ private fun RenewDialog(
                 } else {
                     com.wrh.keshiguanjia.ui.DateField("开始日期", startDate, { startDate = it.toString() }, modifier = Modifier.fillMaxWidth())
                     com.wrh.keshiguanjia.ui.DateField("结束日期", endDate, { endDate = it.toString() }, modifier = Modifier.fillMaxWidth().padding(top = 6.dp))
+                }
+                if (isTermSessions) {
+                    OutlinedTextField(unitPriceText, { unitPriceText = it; error = null }, label = { Text("单价（元/次，可 + - × ÷）*") }, singleLine = true, modifier = Modifier.fillMaxWidth().padding(top = 6.dp))
+                    Text(
+                        "新学期从零累计到课次数，期末按 次数 × 单价 结算",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        modifier = Modifier.padding(top = 4.dp),
+                    )
+                } else {
                     OutlinedTextField(amountText, { amountText = it }, label = { Text("金额（元，可 + - × ÷）") }, singleLine = true, modifier = Modifier.fillMaxWidth().padding(top = 6.dp))
                 }
-                Row(Modifier.padding(top = 8.dp), verticalAlignment = Alignment.CenterVertically) {
-                    Text("缴费状态：", style = MaterialTheme.typography.bodyMedium)
-                    FilterChip(
-                        selected = paidNow,
-                        onClick = { paidNow = true },
-                        label = { Text("已收") },
-                        modifier = Modifier.padding(start = 4.dp),
-                    )
-                    FilterChip(
-                        selected = !paidNow,
-                        onClick = { paidNow = false },
-                        label = { Text("未收 · 期末结") },
-                        modifier = Modifier.padding(start = 6.dp),
-                    )
-                }
-                if (paidNow) {
+                if (!isTermSessions) {
                     Row(Modifier.padding(top = 8.dp), verticalAlignment = Alignment.CenterVertically) {
-                        Text("方式：", style = MaterialTheme.typography.bodyMedium)
-                        Payment.METHOD_LABELS.take(3).forEachIndexed { i, label ->
-                            FilterChip(
-                                selected = method == i,
-                                onClick = { method = i },
-                                label = { Text(label) },
-                                modifier = Modifier.padding(start = if (i == 0) 4.dp else 6.dp),
-                            )
+                        Text("缴费状态：", style = MaterialTheme.typography.bodyMedium)
+                        FilterChip(
+                            selected = paidNow,
+                            onClick = { paidNow = true },
+                            label = { Text("已收") },
+                            modifier = Modifier.padding(start = 4.dp),
+                        )
+                        FilterChip(
+                            selected = !paidNow,
+                            onClick = { paidNow = false },
+                            label = { Text("未收 · 期末结") },
+                            modifier = Modifier.padding(start = 6.dp),
+                        )
+                    }
+                    if (paidNow) {
+                        Row(Modifier.padding(top = 8.dp), verticalAlignment = Alignment.CenterVertically) {
+                            Text("方式：", style = MaterialTheme.typography.bodyMedium)
+                            Payment.METHOD_LABELS.take(3).forEachIndexed { i, label ->
+                                FilterChip(
+                                    selected = method == i,
+                                    onClick = { method = i },
+                                    label = { Text(label) },
+                                    modifier = Modifier.padding(start = if (i == 0) 4.dp else 6.dp),
+                                )
+                            }
                         }
                     }
                 }
@@ -508,8 +611,17 @@ private fun RenewDialog(
         },
         confirmButton = {
             Button(onClick = {
-                val amountCents = if (amountText.isBlank()) 0L else MoneyUtils.parseYuanToCents(amountText)
-                if (amountText.isNotBlank() && amountCents == null) {
+                var unitPriceCents = 0L
+                if (isTermSessions) {
+                    val parsed = MoneyUtils.parseYuanToCents(unitPriceText)
+                    if (parsed == null || parsed <= 0) {
+                        error = "单价必须大于 0"
+                        return@Button
+                    }
+                    unitPriceCents = parsed
+                }
+                val amountCents = if (amountText.isBlank() || isTermSessions) 0L else MoneyUtils.parseYuanToCents(amountText)
+                if (!isTermSessions && amountText.isNotBlank() && amountCents == null) {
                     error = "金额格式错误"
                     return@Button
                 }
@@ -524,7 +636,8 @@ private fun RenewDialog(
                     payDate = today,
                     method = method,
                     validUntil = validUntilText.trim().ifBlank { null },
-                    paymentReceived = paidNow,
+                    paymentReceived = paidNow && !isTermSessions,
+                    unitPriceCents = unitPriceCents,
                 )
                 onConfirm(draft) { err ->
                     if (err == null) onDismiss() else error = err
@@ -793,4 +906,89 @@ private fun RegisterPaymentDialog(
         },
         dismissButton = { TextButton(onClick = onDismiss) { Text("取消") } },
     )
+}
+
+/** 到课统计：该学生全部到课记录，可按课程单选/多选筛选。 */
+@Composable
+private fun AttendanceStatsSection(
+    records: List<com.wrh.keshiguanjia.data.AttendanceWithClass>,
+) {
+    SectionTitle("到课统计")
+    if (records.isEmpty()) {
+        Text(
+            "暂无到课记录",
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.outline,
+            modifier = Modifier.padding(horizontal = 16.dp),
+        )
+        return
+    }
+    // 候选课程按出现顺序去重
+    val classOptions = remember(records) {
+        records.map { it.clazz.id to it.clazz.name }.distinctBy { it.first }
+    }
+    var selected by remember { mutableStateOf<Set<Long>>(emptySet()) } // 空 = 全部
+    val filtered = if (selected.isEmpty()) records else records.filter { it.clazz.id in selected }
+
+    Row(
+        Modifier
+            .fillMaxWidth()
+            .horizontalScroll(rememberScrollState())
+            .padding(horizontal = 12.dp),
+    ) {
+            FilterChip(
+                selected = selected.isEmpty(),
+                onClick = { selected = emptySet() },
+                label = { Text("全部") },
+            )
+            classOptions.forEach { (id, name) ->
+                FilterChip(
+                    selected = id in selected,
+                    onClick = {
+                        selected = if (id in selected) selected - id else selected + id
+                    },
+                    label = { Text(name) },
+                    modifier = Modifier.padding(start = 6.dp),
+                )
+            }
+    }
+
+    val breakdown = filtered.groupBy { it.clazz.name }
+        .map { (name, list) -> "$name ${list.size} 次" }
+        .joinToString(" · ")
+    Text(
+        "共 ${filtered.size} 次" + (if (breakdown.isNotBlank()) "（$breakdown）" else ""),
+        style = MaterialTheme.typography.bodySmall,
+        fontWeight = FontWeight.SemiBold,
+        color = MaterialTheme.colorScheme.primary,
+        modifier = Modifier.padding(horizontal = 16.dp, vertical = 6.dp),
+    )
+    filtered.forEach { r ->
+        Row(
+            Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 3.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Box(
+                Modifier
+                    .padding(end = 8.dp)
+                    .width(8.dp)
+                    .height(18.dp)
+                    .background(
+                        com.wrh.keshiguanjia.ui.schedule.classColor(r.attendance.classId),
+                        androidx.compose.foundation.shape.RoundedCornerShape(2.dp),
+                    ),
+            )
+            Text(
+                r.attendance.date,
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                modifier = Modifier.width(96.dp),
+            )
+            Text(
+                r.clazz.name,
+                style = MaterialTheme.typography.bodySmall,
+                fontWeight = FontWeight.SemiBold,
+            )
+        }
+    }
 }
