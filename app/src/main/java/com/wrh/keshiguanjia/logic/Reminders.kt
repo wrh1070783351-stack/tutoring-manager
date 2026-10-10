@@ -24,6 +24,51 @@ data class ReminderItem(
     }
 }
 
+/** 待打卡待办：当天及以前、发生过但从未点名的课。 */
+data class TodoItem(
+    val date: LocalDate,
+    val classId: Long,
+    val className: String,
+    val startMinute: Int,
+    val endMinute: Int,
+)
+
+object RollCallTodos {
+
+    /**
+     * 统计 [today-lookBackDays, today] 内需要点名的课：
+     *  - 固定课（在班级周期内）与临时加课都算；已停课的不算
+     *  - 该班该日已有任何考勤记录即视为已打卡
+     */
+    fun pending(
+        classes: List<com.wrh.keshiguanjia.data.ClassWithTimes>,
+        overrides: List<com.wrh.keshiguanjia.data.LessonOverride>,
+        markedClassDates: Set<Pair<Long, String>>,
+        today: LocalDate,
+        lookBackDays: Int = 60,
+    ): List<TodoItem> {
+        val result = mutableListOf<TodoItem>()
+        var d = today.minusDays(lookBackDays.toLong())
+        while (!d.isAfter(today)) {
+            ScheduleLogic.lessonsForDate(classes, overrides, d)
+                .filter { !it.isCancelled }
+                .forEach { l ->
+                    if ((l.classId to d.toString()) !in markedClassDates) {
+                        result += TodoItem(
+                            date = d,
+                            classId = l.classId,
+                            className = l.className,
+                            startMinute = l.startMinute,
+                            endMinute = l.endMinute,
+                        )
+                    }
+                }
+            d = d.plusDays(1)
+        }
+        return result.sortedWith(compareByDescending<TodoItem> { it.date }.thenBy { it.startMinute })
+    }
+}
+
 object Reminders {
 
     /**

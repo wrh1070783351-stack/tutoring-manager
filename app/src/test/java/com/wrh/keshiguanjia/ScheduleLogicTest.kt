@@ -96,4 +96,39 @@ class ScheduleLogicTest {
         assertEquals(3, cells.takeWhile { it == null }.size)
         assertEquals(LocalDate.parse("2026-10-01"), cells.first { it != null })
     }
+
+    @Test
+    fun classDateRange_filtersFixedLessonsButKeepsAddOverride() {
+        val ranged = ClassWithTimes(
+            clazz = ClassRoom(id = 3, name = "Ranged", startDate = "2026-10-01", endDate = "2026-10-31"),
+            times = listOf(ClassTime(classId = 3, dayOfWeek = 1, startMinute = 1110, endMinute = 1230)),
+        )
+        val mondaySep = LocalDate.parse("2026-09-28") // 范围前
+        val mondayOct = LocalDate.parse("2026-10-05") // 范围内
+
+        assertTrue(ScheduleLogic.lessonsForDate(listOf(ranged), emptyList(), mondaySep).isEmpty())
+        assertEquals(1, ScheduleLogic.lessonsForDate(listOf(ranged), emptyList(), mondayOct).size)
+
+        // 范围外的临时加课仍应生成
+        val extra = listOf(
+            LessonOverride(classId = 3, date = "2026-09-28", type = LessonOverride.TYPE_ADD, startMinute = 540, endMinute = 660)
+        )
+        val sepLessons = ScheduleLogic.lessonsForDate(listOf(ranged), extra, mondaySep)
+        assertEquals(1, sepLessons.size)
+        assertTrue(sepLessons[0].isExtra)
+    }
+
+    @Test
+    fun classRange_nullMeansUnlimited() {
+        val unlimited = ClassWithTimes(
+            clazz = ClassRoom(id = 4, name = "Always"),
+            times = listOf(ClassTime(classId = 4, dayOfWeek = 1, startMinute = 600, endMinute = 720)),
+        )
+        val old = LocalDate.parse("2020-01-06")
+        val future = LocalDate.parse("2030-01-07")
+        assertTrue(ScheduleLogic.isClassInRange(null, null, old))
+        assertTrue(ScheduleLogic.isClassInRange(null, null, future))
+        assertEquals(1, ScheduleLogic.lessonsForDate(listOf(unlimited), emptyList(), old).size)
+        assertEquals(1, ScheduleLogic.lessonsForDate(listOf(unlimited), emptyList(), future).size)
+    }
 }

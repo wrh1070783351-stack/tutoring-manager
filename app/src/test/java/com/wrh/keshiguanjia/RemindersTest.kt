@@ -125,3 +125,55 @@ class StatsLogicTest {
         assertEquals("2026-09-28", start.toString())
     }
 }
+
+class RollCallTodosTest {
+
+    private val classes = listOf(
+        com.wrh.keshiguanjia.data.ClassWithTimes(
+            clazz = com.wrh.keshiguanjia.data.ClassRoom(id = 1, name = "Math A"),
+            times = listOf(
+                com.wrh.keshiguanjia.data.ClassTime(classId = 1, dayOfWeek = 1, startMinute = 1110, endMinute = 1230)
+            ),
+        ),
+    )
+    private val today = LocalDate.parse("2026-09-29") // 周二；本周一 9/28 有课
+
+    @Test
+    fun unmarkedPastLesson_isTodo() {
+        val todos = com.wrh.keshiguanjia.logic.RollCallTodos.pending(classes, emptyList(), emptySet(), today, lookBackDays = 1)
+        val t = todos.single()
+        assertEquals(LocalDate.parse("2026-09-28"), t.date)
+        assertEquals("Math A", t.className)
+        assertEquals(1110, t.startMinute)
+    }
+
+    @Test
+    fun markedClassDate_notTodo() {
+        val marked = setOf(1L to "2026-09-28")
+        assertTrue(
+            com.wrh.keshiguanjia.logic.RollCallTodos.pending(classes, emptyList(), marked, today, lookBackDays = 1).isEmpty()
+        )
+    }
+
+    @Test
+    fun futureLessons_andCancelled_areNotTodos() {
+        // 未来周一 10/5 不进待办
+        assertTrue(
+            com.wrh.keshiguanjia.logic.RollCallTodos.pending(classes, emptyList(), setOf(1L to "2026-09-28"), today, lookBackDays = 1).isEmpty()
+        )
+        // 停课不算待办
+        val cancelled = listOf(
+            com.wrh.keshiguanjia.data.LessonOverride(classId = 1, date = "2026-09-28", type = com.wrh.keshiguanjia.data.LessonOverride.TYPE_CANCEL)
+        )
+        assertTrue(
+            com.wrh.keshiguanjia.logic.RollCallTodos.pending(classes, cancelled, emptySet(), today, lookBackDays = 1).isEmpty()
+        )
+    }
+
+    @Test
+    fun lookBackBounds_todos() {
+        // 回看 7 天：9/22（上周二）无 Math A 课，9/28 有 → 仍只有 9/28 一条
+        val todos = com.wrh.keshiguanjia.logic.RollCallTodos.pending(classes, emptyList(), emptySet(), today, lookBackDays = 7)
+        assertEquals(1, todos.size)
+    }
+}

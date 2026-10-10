@@ -143,6 +143,9 @@ class EnrollmentRepository(
     fun observeAttendanceForStudent(studentId: Long): Flow<List<Attendance>> =
         attendanceDao.observeForStudent(studentId)
 
+    /** 已点名的 (班级, 日期) 组合（待打卡判断用）。 */
+    fun observeMarkedClassDates(): Flow<List<ClassDateRow>> = attendanceDao.observeMarkedClassDates()
+
     /** 标记某个学生的出勤；已存在则修改（可反复改状态）。 */
     suspend fun markAttendance(studentId: Long, enrollmentId: Long, classId: Long, dateIso: String, status: Int) {
         val existing = attendanceDao.getFor(studentId, classId, dateIso)

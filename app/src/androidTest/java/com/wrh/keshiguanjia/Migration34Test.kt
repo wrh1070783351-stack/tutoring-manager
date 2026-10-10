@@ -64,7 +64,7 @@ class Migration34Test {
         raw.close()
 
         val db = Room.databaseBuilder(context, KeshiDatabase::class.java, "mig34.db")
-            .addMigrations(KeshiDatabase.MIGRATION_1_2, KeshiDatabase.MIGRATION_2_3, KeshiDatabase.MIGRATION_3_4)
+            .addMigrations(KeshiDatabase.MIGRATION_1_2, KeshiDatabase.MIGRATION_2_3, KeshiDatabase.MIGRATION_3_4, KeshiDatabase.MIGRATION_4_5)
             .build()
         try {
             runBlocking {

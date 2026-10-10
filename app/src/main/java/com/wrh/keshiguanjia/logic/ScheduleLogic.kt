@@ -39,17 +39,21 @@ object ScheduleLogic {
         for (cw in classes) {
             val ov = overridesByClass[cw.clazz.id].orEmpty()
             val cancelled = ov.any { it.type == LessonOverride.TYPE_CANCEL }
-            cw.times.filter { it.dayOfWeek == dayOfWeek }.forEach { t ->
-                result += DayLesson(
-                    classId = cw.clazz.id,
-                    className = cw.clazz.name,
-                    subject = cw.clazz.subject,
-                    startMinute = t.startMinute,
-                    endMinute = t.endMinute,
-                    room = t.room,
-                    isCancelled = cancelled,
-                    overrideId = ov.firstOrNull { it.type == LessonOverride.TYPE_CANCEL }?.id,
-                )
+            // 课程周期：不在班级起止日期内的固定课不生成（临时加课不受限）
+            val inRange = isClassInRange(cw.clazz.startDate, cw.clazz.endDate, date)
+            if (inRange) {
+                cw.times.filter { it.dayOfWeek == dayOfWeek }.forEach { t ->
+                    result += DayLesson(
+                        classId = cw.clazz.id,
+                        className = cw.clazz.name,
+                        subject = cw.clazz.subject,
+                        startMinute = t.startMinute,
+                        endMinute = t.endMinute,
+                        room = t.room,
+                        isCancelled = cancelled,
+                        overrideId = ov.firstOrNull { it.type == LessonOverride.TYPE_CANCEL }?.id,
+                    )
+                }
             }
             ov.filter { it.type == LessonOverride.TYPE_ADD }.forEach { o ->
                 result += DayLesson(
@@ -65,6 +69,13 @@ object ScheduleLogic {
             }
         }
         return result.sortedBy { it.startMinute }
+    }
+
+    /** 班级课程周期判断：起止均可空；日期字符串解析失败按不限处理。 */
+    fun isClassInRange(startDate: String?, endDate: String?, date: LocalDate): Boolean {
+        val start = startDate?.let { runCatching { LocalDate.parse(it) }.getOrNull() }
+        val end = endDate?.let { runCatching { LocalDate.parse(it) }.getOrNull() }
+        return (start == null || !date.isBefore(start)) && (end == null || !date.isAfter(end))
     }
 
     fun lessonsForMonth(

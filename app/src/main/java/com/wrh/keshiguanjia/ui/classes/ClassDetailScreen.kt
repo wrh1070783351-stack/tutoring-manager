@@ -166,6 +166,13 @@ fun ClassDetailScreen(
                     if (cw.clazz.subject.isNotBlank()) {
                         Text("科目：${cw.clazz.subject}", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
                     }
+                    if (cw.clazz.startDate != null || cw.clazz.endDate != null) {
+                        Text(
+                            "周期：${cw.clazz.startDate ?: "…"} ~ ${cw.clazz.endDate ?: "…"}",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        )
+                    }
                     Text(
                         "上课：" + cw.timesSummary().ifBlank { "未设置" },
                         style = MaterialTheme.typography.bodySmall,

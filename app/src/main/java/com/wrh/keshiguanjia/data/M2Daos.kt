@@ -25,6 +25,12 @@ data class AttendanceWithClass(
     val clazz: ClassRoom,
 )
 
+/** 已点名的 (班级, 日期) 行 */
+data class ClassDateRow(
+    val classId: Long,
+    val date: String,
+)
+
 /** 报名及其班级、课时包/学期记录、学生的聚合查询结果。 */
 data class EnrollmentWithDetails(
     @Embedded val enrollment: Enrollment,
@@ -188,6 +194,10 @@ interface AttendanceDao {
     @Transaction
     @Query("SELECT * FROM attendance WHERE studentId = :studentId AND status = 0 ORDER BY date DESC")
     fun observeAttendedForStudent(studentId: Long): Flow<List<AttendanceWithClass>>
+
+    /** 已点过名的 (班级, 日期) 组合——用于待打卡判断。 */
+    @Query("SELECT DISTINCT classId, date FROM attendance")
+    fun observeMarkedClassDates(): Flow<List<ClassDateRow>>
 
     @Query("DELETE FROM attendance WHERE id = :id")
     suspend fun deleteById(id: Long)

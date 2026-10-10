@@ -13,7 +13,7 @@ import androidx.sqlite.db.SupportSQLiteDatabase
         Enrollment::class, ClassPackage::class, TermRecord::class,
         Payment::class, LessonOverride::class, Attendance::class,
     ],
-    version = 4,
+    version = 5,
     exportSchema = false,
 )
 abstract class KeshiDatabase : RoomDatabase() {
@@ -131,9 +131,17 @@ abstract class KeshiDatabase : RoomDatabase() {
             }
         }
 
+        /** v4 → v5：classes 增加课程周期起止列。 */
+        val MIGRATION_4_5 = object : Migration(4, 5) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL("ALTER TABLE `classes` ADD COLUMN `startDate` TEXT")
+                db.execSQL("ALTER TABLE `classes` ADD COLUMN `endDate` TEXT")
+            }
+        }
+
         fun build(context: Context): KeshiDatabase =
             Room.databaseBuilder(context, KeshiDatabase::class.java, NAME)
-                .addMigrations(MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4)
+                .addMigrations(MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4, MIGRATION_4_5)
                 .build()
     }
 }

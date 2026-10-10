@@ -47,7 +47,7 @@ class MigrationTest {
 
         // 2) Room 打开 → 自动执行 1_2 + 2_3 + 3_4（一路升到当前版本）
         val db = Room.databaseBuilder(context, KeshiDatabase::class.java, "mig-test.db")
-            .addMigrations(KeshiDatabase.MIGRATION_1_2, KeshiDatabase.MIGRATION_2_3, KeshiDatabase.MIGRATION_3_4)
+            .addMigrations(KeshiDatabase.MIGRATION_1_2, KeshiDatabase.MIGRATION_2_3, KeshiDatabase.MIGRATION_3_4, KeshiDatabase.MIGRATION_4_5)
             .build()
         try {
             runBlocking {

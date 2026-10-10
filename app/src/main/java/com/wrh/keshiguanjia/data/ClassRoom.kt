@@ -12,6 +12,9 @@ data class ClassRoom(
     /** 0 = 开班，1 = 结班，2 = 预定（已排未开） */
     val status: Int = STATUS_OPEN,
     val note: String = "",
+    /** 课程周期起止（可选，ISO 日期）；范围外的固定课不再生成，null = 不限 */
+    val startDate: String? = null,
+    val endDate: String? = null,
     val createdAt: Long = System.currentTimeMillis(),
 ) {
     companion object {

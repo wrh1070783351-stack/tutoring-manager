@@ -68,6 +68,8 @@ class ClassEditViewModel(
         val subject: String = "",
         val status: Int = ClassRoom.STATUS_OPEN,
         val note: String = "",
+        val startDateText: String = "",
+        val endDateText: String = "",
         val times: List<ClassTimeDraft> = listOf(ClassTimeDraft()),
         val isNew: Boolean = true,
         val loaded: Boolean = false,
@@ -96,6 +98,8 @@ class ClassEditViewModel(
                             subject = cw.clazz.subject,
                             status = cw.clazz.status,
                             note = cw.clazz.note,
+                            startDateText = cw.clazz.startDate ?: "",
+                            endDateText = cw.clazz.endDate ?: "",
                             times = ClassTimeExpansion.collapse(cw.times),
                             isNew = false,
                             loaded = true,
@@ -115,6 +119,8 @@ class ClassEditViewModel(
     fun onSubject(v: String) = _state.update { it.copy(subject = v) }
     fun onNote(v: String) = _state.update { it.copy(note = v) }
     fun onStatus(v: Int) = _state.update { it.copy(status = v) }
+    fun onStartDate(v: String) = _state.update { it.copy(startDateText = v) }
+    fun onEndDate(v: String) = _state.update { it.copy(endDateText = v) }
 
     fun addTime() = _state.update { it.copy(times = it.times + ClassTimeDraft(), error = null) }
     fun removeTime(index: Int) = _state.update { s ->
@@ -147,6 +153,8 @@ class ClassEditViewModel(
                 subject = s.subject.trim(),
                 status = s.status,
                 note = s.note.trim(),
+                startDate = s.startDateText.trim().ifBlank { null },
+                endDate = s.endDateText.trim().ifBlank { null },
             ),
             times,
         )
@@ -241,6 +249,23 @@ fun ClassEditScreen(classId: Long, onDone: () -> Unit) {
                     modifier = Modifier.padding(start = if (i == 0) 4.dp else 8.dp),
                 )
             }
+        }
+
+        Text("课程周期（可选）", style = MaterialTheme.typography.titleSmall, modifier = Modifier.padding(top = 12.dp))
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            com.wrh.keshiguanjia.ui.DateField(
+                "开课日期",
+                state.startDateText.ifBlank { java.time.LocalDate.now().toString() },
+                { vm.onStartDate(it.toString()) },
+                modifier = Modifier.weight(1f),
+            )
+            Text("  至  ", style = MaterialTheme.typography.bodyMedium)
+            com.wrh.keshiguanjia.ui.DateField(
+                "结课日期",
+                state.endDateText.ifBlank { java.time.LocalDate.now().plusMonths(4).toString() },
+                { vm.onEndDate(it.toString()) },
+                modifier = Modifier.weight(1f),
+            )
         }
 
         Text(
