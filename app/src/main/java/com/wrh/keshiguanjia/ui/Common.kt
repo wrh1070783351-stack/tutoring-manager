@@ -1,14 +1,16 @@
 package com.wrh.keshiguanjia.ui
 
 import androidx.compose.foundation.background
+import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.BoxScope
+import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.material.icons.Icons
@@ -34,6 +36,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.unit.dp
 import com.wrh.keshiguanjia.logic.ScheduleLogic
 import com.wrh.keshiguanjia.logic.TimeUtils
@@ -169,17 +172,29 @@ fun DateField(
     val initial = remember(value) {
         runCatching { LocalDate.parse(value) }.getOrDefault(LocalDate.now())
     }
-    OutlinedTextField(
-        value = value,
-        onValueChange = {},
-        readOnly = true,
-        label = { Text(label) },
-        singleLine = true,
-        trailingIcon = {
-            Icon(Icons.Filled.DateRange, contentDescription = null, tint = MaterialTheme.colorScheme.onSurfaceVariant)
-        },
-        modifier = modifier.clickable { show = true },
-    )
+    Box(modifier = modifier) {
+        OutlinedTextField(
+            value = value,
+            onValueChange = {},
+            readOnly = true,
+            label = { Text(label) },
+            singleLine = true,
+            trailingIcon = {
+                Icon(Icons.Filled.DateRange, contentDescription = null, tint = MaterialTheme.colorScheme.onSurfaceVariant)
+            },
+            modifier = Modifier.fillMaxWidth(),
+        )
+        // 透明拦截层：TextField 会吞掉点击事件，readOnly 下用覆盖层打开日历
+        Box(
+            Modifier
+                .matchParentSize()
+                .testTag("date_field_overlay")
+                .clickable(
+                    interactionSource = remember { MutableInteractionSource() },
+                    indication = null,
+                ) { show = true },
+        )
+    }
     if (show) {
         SimpleCalendarDialog(
             title = label,
