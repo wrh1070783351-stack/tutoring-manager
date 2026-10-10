@@ -1,7 +1,10 @@
 package com.wrh.keshiguanjia.ui
 
 import androidx.compose.foundation.background
+import androidx.compose.ui.draw.clip
 import androidx.compose.foundation.interaction.MutableInteractionSource
+import androidx.compose.foundation.interaction.PressInteraction
+import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -172,28 +175,34 @@ fun DateField(
     val initial = remember(value) {
         runCatching { LocalDate.parse(value) }.getOrDefault(LocalDate.now())
     }
-    Box(modifier = modifier) {
-        OutlinedTextField(
-            value = value,
-            onValueChange = {},
-            readOnly = true,
-            label = { Text(label) },
-            singleLine = true,
-            trailingIcon = {
-                Icon(Icons.Filled.DateRange, contentDescription = null, tint = MaterialTheme.colorScheme.onSurfaceVariant)
-            },
-            modifier = Modifier.fillMaxWidth(),
-        )
-        // 透明拦截层：TextField 会吞掉点击事件，readOnly 下用覆盖层打开日历
-        Box(
+    Box(modifier) {
+        // 自绘可点击"输入框"外观：普通 clickable 交互可靠（只读 TextField 会吞点击）
+        Column(
             Modifier
-                .matchParentSize()
-                .testTag("date_field_overlay")
-                .clickable(
-                    interactionSource = remember { MutableInteractionSource() },
-                    indication = null,
-                ) { show = true },
-        )
+                .fillMaxWidth()
+                .clip(MaterialTheme.shapes.extraSmall)
+                .border(1.dp, MaterialTheme.colorScheme.outline, MaterialTheme.shapes.extraSmall)
+                .clickable { show = true }
+                .padding(start = 14.dp, top = 6.dp, end = 8.dp, bottom = 8.dp),
+        ) {
+            Text(
+                label,
+                style = MaterialTheme.typography.labelSmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Text(
+                    value,
+                    style = MaterialTheme.typography.bodyLarge,
+                    modifier = Modifier.weight(1f),
+                )
+                Icon(
+                    Icons.Filled.DateRange,
+                    contentDescription = null,
+                    tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+            }
+        }
     }
     if (show) {
         SimpleCalendarDialog(
