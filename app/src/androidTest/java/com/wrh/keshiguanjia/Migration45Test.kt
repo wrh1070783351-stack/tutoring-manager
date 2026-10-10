@@ -64,6 +64,7 @@ class Migration45Test {
             .addMigrations(
                 KeshiDatabase.MIGRATION_1_2, KeshiDatabase.MIGRATION_2_3,
                 KeshiDatabase.MIGRATION_3_4, KeshiDatabase.MIGRATION_4_5,
+                KeshiDatabase.MIGRATION_5_6,
             )
             .build()
         try {

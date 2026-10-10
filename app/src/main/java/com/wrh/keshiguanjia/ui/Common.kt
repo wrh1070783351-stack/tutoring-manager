@@ -177,6 +177,7 @@ fun DateField(
     }
     Box(modifier) {
         // 自绘可点击"输入框"外观：普通 clickable 交互可靠（只读 TextField 会吞点击）
+        // 空值诚实显示"未设置"，避免看起来像已设置而实际未保存
         Column(
             Modifier
                 .fillMaxWidth()
@@ -192,8 +193,9 @@ fun DateField(
             )
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Text(
-                    value,
+                    value.ifBlank { "未设置" },
                     style = MaterialTheme.typography.bodyLarge,
+                    color = if (value.isBlank()) MaterialTheme.colorScheme.outline else MaterialTheme.colorScheme.onSurface,
                     modifier = Modifier.weight(1f),
                 )
                 Icon(

@@ -13,7 +13,7 @@ import androidx.sqlite.db.SupportSQLiteDatabase
         Enrollment::class, ClassPackage::class, TermRecord::class,
         Payment::class, LessonOverride::class, Attendance::class,
     ],
-    version = 5,
+    version = 6,
     exportSchema = false,
 )
 abstract class KeshiDatabase : RoomDatabase() {
@@ -139,9 +139,29 @@ abstract class KeshiDatabase : RoomDatabase() {
             }
         }
 
+        /**
+         * v5 → v6：老班级数据对齐。
+         * 起止日期功能上线前创建的班级 startDate/endDate 为 NULL，导致课表过滤不生效。
+         * 对从未设置过周期、且已有实际上课记录（任意考勤）的班级：
+         * 开课日期 = 最早一次上课日期（该班考勤里最早的日期），结课日期保持不限（进行中的班）。
+         */
+        val MIGRATION_5_6 = object : Migration(5, 6) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL(
+                    "UPDATE `classes` SET `startDate` = (" +
+                        "SELECT MIN(a.date) FROM attendance a " +
+                        "JOIN enrollments e ON a.enrollmentId = e.id " +
+                        "WHERE e.classId = classes.id" +
+                        ") WHERE `startDate` IS NULL AND `endDate` IS NULL AND EXISTS (" +
+                        "SELECT 1 FROM attendance a JOIN enrollments e ON a.enrollmentId = e.id " +
+                        "WHERE e.classId = classes.id)"
+                )
+            }
+        }
+
         fun build(context: Context): KeshiDatabase =
             Room.databaseBuilder(context, KeshiDatabase::class.java, NAME)
-                .addMigrations(MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4, MIGRATION_4_5)
+                .addMigrations(MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4, MIGRATION_4_5, MIGRATION_5_6)
                 .build()
     }
 }

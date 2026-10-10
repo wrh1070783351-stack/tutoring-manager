@@ -66,7 +66,7 @@ class Migration23Test {
 
         // 2) Room 打开（user_version=2）→ 执行到当前版本 → 考勤表可用
         val db = Room.databaseBuilder(context, KeshiDatabase::class.java, "mig23.db")
-            .addMigrations(KeshiDatabase.MIGRATION_1_2, KeshiDatabase.MIGRATION_2_3, KeshiDatabase.MIGRATION_3_4, KeshiDatabase.MIGRATION_4_5)
+            .addMigrations(KeshiDatabase.MIGRATION_1_2, KeshiDatabase.MIGRATION_2_3, KeshiDatabase.MIGRATION_3_4, KeshiDatabase.MIGRATION_4_5, KeshiDatabase.MIGRATION_5_6)
             .build()
         try {
             runBlocking {
